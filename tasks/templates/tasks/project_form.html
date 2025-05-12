@@ -1,0 +1,24 @@
+{# D:\trabajo\Propio\IA\programing\TaskFlow\tasks\templates\tasks\project_form.html #}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crear Nuevo Proyecto</title>
+    <style>
+        .errorlist {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Crear Nuevo Proyecto</h1>
+
+    <form method="post" action="{% url 'tasks:project_create' %}">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Guardar Proyecto</button>
+    </form>
+
+    <p><a href="{% url 'tasks:project_list' %}">Cancelar y volver a la lista</a></p>
+
+</body>
+</html>

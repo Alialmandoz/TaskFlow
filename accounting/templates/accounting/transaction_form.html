@@ -1,0 +1,40 @@
+{# D:\trabajo\Propio\IA\programing\TaskFlow\accounting\templates\accounting\transaction_form.html #}
+{% extends "tasks/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ page_title|default:"Gestionar Transacción" }} - TaskFlow Contabilidad{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>{{ page_title|default:"Gestionar Transacción" }}</h2>
+    <hr>
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        
+        {# Esta es la única directiva que renderiza el cuerpo del formulario. #}
+        {{ form|crispy }} 
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary">Guardar Transacción</button>
+            <a href="{% url 'tasks:project_list' %}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block javascript %}
+{{ super }}
+{# Espacio para JavaScript específico de esta página si fuera necesario más adelante. #}
+{# 
+<script>
+    // Ejemplo:
+    // document.addEventListener('DOMContentLoaded', function() {
+    //     var dateInput = document.querySelector('input[type="date"]');
+    //     if (dateInput && dateInput.type !== 'date') { 
+    //         dateInput.setAttribute('placeholder', 'AAAA-MM-DD');
+    //     }
+    // });
+</script>
+#}
+{% endblock %}

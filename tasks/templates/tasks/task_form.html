@@ -1,0 +1,24 @@
+{# D:\trabajo\Propio\IA\programing\TaskFlow\tasks\templates\tasks\task_form.html #}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Añadir Tarea a {{ project.name }}</title>
+    <style>
+        .errorlist {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Añadir Tarea a Proyecto: "{{ project.name }}"</h1>
+
+    <form method="post" action="{% url 'tasks:task_create' project_pk=project.pk %}">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Guardar Tarea</button>
+    </form>
+
+    <p><a href="{% url 'tasks:project_detail' pk=project.pk %}">Cancelar y volver al proyecto</a></p>
+
+</body>
+</html>
