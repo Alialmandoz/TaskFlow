@@ -1,143 +1,58 @@
 {# D:\trabajo\Propio\IA\programing\TaskFlow\tasks\templates\tasks\project_list.html #}
 {% extends "tasks/base.html" %}
 
-{% block title %}Dashboard - Mis Proyectos{% endblock %}
+{% block title %}Mis Proyectos - TaskFlow{% endblock %}
 
 {% block content %}
-    {# Sección de la Consola de IA (anteriormente en ai_console.html) #}
-    <section id="ai-console-section" style="margin-bottom: 30px; padding: 20px; background-color: #e9f7fd; border-radius: 5px;">
-        <h2>Crear con IA</h2>
-        <p style="font-size: 0.9em; color: #555;">
-            Usa lenguaje natural para crear proyectos y tareas. Ejemplos:<br>
-            <em>"Crear proyecto 'Rediseño Web' con descripción 'Actualizar el sitio principal'."</em><br>
-            <em>"Añadir tarea 'Diseñar wireframes' al proyecto 'Rediseño Web' para el 2025-06-15."</em>
-        </p>
-
-        <form id="aiCommandForm">
-            {% csrf_token %}
-            <div>
-                <textarea id="instruction" name="instruction" rows="3" placeholder="Escribe tu instrucción aquí..." required></textarea>
-            </div>
-            <button type="submit">Enviar a IA</button>
-        </form>
-        <div id="responseArea">
-            Esperando instrucción...
-        </div>
-    </section>
-    {# Fin Sección de la Consola de IA #}
-
-    <hr style="margin: 30px 0;">
-
-    {# Sección de Listado de Proyectos #}
+    {# Esta página ahora solo muestra la lista de proyectos #}
     <section id="projects-section">
         <h2>Mis Proyectos</h2>
+         <p><a href="{% url 'tasks:project_create' %}" class="btn btn-primary mb-3">Crear Nuevo Proyecto (Manual)</a></p>
 
         {% if projects %}
-            <ul class="project-list">
+            <ul class="project-list" style="padding-left: 0; list-style: none;">
                 {% for project in projects %}
-                    <li class="project-list-item">
+                    <li class="project-list-item" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
                         <h3>
-                            {# Enlace al detalle del proyecto. Si decides no tener página de detalle separada, esto podría cambiar #}
                             <a href="{% url 'tasks:project_detail' pk=project.pk %}">{{ project.name }}</a>
                         </h3>
                         {% if project.description %}
                             <p style="font-size: 0.9em; color: #6c757d;">{{ project.description }}</p>
                         {% endif %}
-                        
+
                         <h4>Tareas:</h4>
-                        {% if project.task_set.all %} {# Obtenemos las tareas directamente aquí #}
+                        {% if project.task_set.all %}
                             <ul class="task-list">
                                 {% for task in project.task_set.all %}
-                                    <li class="task-list-item">
-                                        {{ task.description }} 
+                                    <li class="task-list-item" style="padding: 5px 0; border-bottom: 1px dashed #e0e0e0;">
+                                         {{ task.description }}
                                         <span style="font-size: 0.8em; color: #6c757d;">
                                             (Estado: {{ task.get_status_display }})
                                             {% if task.due_date %} - Vence: {{ task.due_date|date:"d M Y" }}{% endif %}
                                         </span>
-                                        {# Aquí podrías añadir enlaces para editar/completar tarea si implementas esa funcionalidad #}
                                     </li>
+                                    {% if forloop.last %}
+                                        <style>
+                                        .task-list-item:last-child { border-bottom: none; }
+                                        </style>
+                                    {% endif %}
                                 {% endfor %}
                             </ul>
                         {% else %}
                             <p style="font-size: 0.9em; color: #6c757d;">Este proyecto aún no tiene tareas.</p>
                         {% endif %}
-                        {# Enlace para añadir tarea manualmente (si aún lo queremos visible) #}
-                        {# Podríamos quitarlo si la IA es el método principal de creación de tareas #}
                         <p style="margin-top:10px;"><a href="{% url 'tasks:task_create' project_pk=project.pk %}" style="font-size:0.9em;">Añadir Tarea (Manual)</a></p>
                     </li>
                 {% endfor %}
             </ul>
         {% else %}
-            <p>Aún no tienes proyectos. ¡Usa la consola de IA arriba para crear uno!</p>
+            <p>Aún no tienes proyectos.</p>
         {% endif %}
     </section>
-    {# Fin Sección de Listado de Proyectos #}
+
 {% endblock %}
 
+{# --- CORREGIDO: Eliminado el bloque javascript de aquí --- #}
 {% block javascript %}
-{# JavaScript para la consola de IA (anteriormente en ai_console.html) #}
-<script>
-    document.addEventListener('DOMContentLoaded', function() { // Asegura que el DOM esté cargado
-        const aiCommandForm = document.getElementById('aiCommandForm');
-        if (aiCommandForm) {
-            aiCommandForm.addEventListener('submit', async function(event) {
-                event.preventDefault(); 
-
-                const instructionText = document.getElementById('instruction').value;
-                const responseArea = document.getElementById('responseArea');
-                const csrfTokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
-                
-                if (!csrfTokenInput) {
-                    console.error('CSRF token not found!');
-                    responseArea.innerHTML = '<p class="error">Error de configuración: Falta el token CSRF.</p>';
-                    return;
-                }
-                const csrfToken = csrfTokenInput.value;
-
-                responseArea.innerHTML = '<p class="loading">Procesando tu instrucción...</p>';
-                document.getElementById('instruction').value = ''; // Limpiar el textarea después de enviar
-
-                try {
-                    const response = await fetch("{% url 'tasks:ai_command_handler' %}", {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': csrfToken
-                        },
-                        body: JSON.stringify({ instruction: instructionText })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        let htmlResponse = `<p class="success"><strong>${data.message || 'Operación completada.'}</strong></p>`;
-                        if (data.type === 'project_created' && data.project_id) {
-                            htmlResponse += `<p>ID del Proyecto: ${data.project_id}</p>`;
-                            // Podríamos forzar una recarga de la página para ver el nuevo proyecto, o añadirlo dinámicamente con más JS
-                            // window.location.reload(); // Opción simple para ver el cambio
-                        } else if (data.type === 'task_created' && data.task_id) {
-                            htmlResponse += `<p>ID de la Tarea: ${data.task_id}</p>`;
-                            // window.location.reload(); // Opción simple para ver el cambio
-                        }
-                        responseArea.innerHTML = htmlResponse;
-                        
-                        // Si la operación fue exitosa y afectó la lista (proyecto/tarea creada),
-                        // recargar la página para ver los cambios es una forma simple de actualizar.
-                        // Una solución más avanzada sería actualizar el DOM dinámicamente.
-                        if (data.type === 'project_created' || data.type === 'task_created') {
-                            setTimeout(() => { window.location.reload(); }, 1500); // Recarga después de 1.5 segundos
-                        }
-
-                    } else {
-                        responseArea.innerHTML = `<p class="error"><strong>Error:</strong> ${data.error || 'Ocurrió un error desconocido.'}</p>`;
-                    }
-
-                } catch (error) {
-                    console.error('Error en la solicitud AI:', error);
-                    responseArea.innerHTML = `<p class="error"><strong>Error de conexión o en el script:</strong> ${error.message}</p>`;
-                }
-            });
-        }
-    });
-</script>
+{# Ya no se necesita el JS de la consola de IA aquí #}
 {% endblock %}

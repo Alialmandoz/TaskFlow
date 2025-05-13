@@ -2,44 +2,48 @@
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse # Para devolver respuestas JSON
-from django.views.decorators.csrf import csrf_exempt # Para deshabilitar CSRF si se prueba con herramientas externas (ver nota)
-from django.views.decorators.http import require_POST # Para asegurar que solo sea POST
-import json # Para parsear el cuerpo de la solicitud JSON
-import os # Para obtener la clave de API
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+import json
+import os
+from datetime import datetime
+import traceback
 
 # Importaciones de Gemini
-import google.generativeai as genai # Importa la biblioteca de Gemini
-from google.generativeai.types import HarmCategory, HarmBlockThreshold # Para configurar seguridad
+import google.generativeai as genai
+# --- AÑADIDO: Importar excepción específica de Gemini ---
+from google.generativeai.types import HarmCategory, HarmBlockThreshold, StopCandidateException
 
+# Modelos de Tasks
 from .models import Project, Task
+# Formularios de Tasks
 from .forms import ProjectForm, TaskForm
-# Importamos nuestras funciones de servicio
+# Servicios de Tasks
 from .services import create_project_for_user, create_task_for_project, get_project_by_user_and_name
 
-# Decorador para asegurar que solo usuarios autenticados puedan acceder a estas vistas.
-# tasks/views.py - extracto de la vista project_list actualizada
+# Importaciones de Accounting
+from accounting.models import Category, Transaction
+from accounting.services import create_transaction_from_data
 
+
+# Vista project_list simplificada (solo lista proyectos)
 @login_required
 def project_list(request):
     """
-    Vista para listar todos los proyectos pertenecientes al usuario autenticado,
-    incluyendo sus tareas precargadas para eficiencia.
+    Vista para listar SOLAMENTE los proyectos del usuario.
+    El dashboard principal ahora está en la app 'dashboard'.
     """
-    # Usamos prefetch_related para obtener todas las tareas asociadas
-    # a los proyectos en una consulta adicional eficiente, en lugar de una por proyecto.
     projects = Project.objects.filter(user=request.user).prefetch_related('task_set').order_by('name')
     context = {
-        'projects': projects
-        # 'ai_console_url_name': 'tasks:ai_command_handler' # Ya no es necesario si el form está aquí
+        'projects': projects,
     }
     return render(request, 'tasks/project_list.html', context)
 
+# Vistas de detalle, creación manual de proyecto y tarea (sin cambios)
 @login_required
 def project_detail(request, pk):
     """
     Vista para mostrar los detalles de un proyecto específico y sus tareas asociadas.
-    Solo muestra proyectos que pertenecen al usuario autenticado.
     """
     project = get_object_or_404(Project, pk=pk, user=request.user)
     tasks = project.task_set.all().order_by('due_date', 'created_at')
@@ -52,8 +56,7 @@ def project_detail(request, pk):
 @login_required
 def project_create(request):
     """
-    Vista para manejar la creación de nuevos proyectos.
-    Responde a GET mostrando el formulario y a POST procesando los datos.
+    Vista para manejar la creación manual de nuevos proyectos.
     """
     if request.method == 'POST':
         form = ProjectForm(request.POST)
@@ -64,13 +67,12 @@ def project_create(request):
             return redirect('tasks:project_list')
     else:
         form = ProjectForm()
-
     return render(request, 'tasks/project_form.html', {'form': form})
 
 @login_required
 def task_create(request, project_pk):
     """
-    Vista para manejar la creación de nuevas tareas dentro de un proyecto específico.
+    Vista para manejar la creación manual de nuevas tareas dentro de un proyecto específico.
     """
     project = get_object_or_404(Project, pk=project_pk, user=request.user)
     if request.method == 'POST':
@@ -84,194 +86,195 @@ def task_create(request, project_pk):
         form = TaskForm()
     return render(request, 'tasks/task_form.html', {'form': form, 'project': project})
 
-
-# Definición de las funciones para Gemini
+# Declaraciones de funciones Gemini (sin cambios)
 GEMINI_FUNCTION_DECLARATIONS = [
-    {
+     {
         "name": "create_project",
         "description": "Crea un nuevo proyecto para el usuario. Útil cuando el usuario quiere iniciar un nuevo proyecto, plan o contenedor de tareas.",
-        "parameters": {
-            "type": "OBJECT", # Indica que los parámetros son un objeto con propiedades
-            "properties": {
-                "name": {
-                    "type": "STRING",
-                    "description": "El nombre del proyecto."
-                },
-                "description": {
-                    "type": "STRING",
-                    "description": "Una descripción detallada del proyecto (opcional)."
-                }
-            },
-            "required": ["name"] # Indica qué propiedades son obligatorias
-        }
+        "parameters": { "type": "OBJECT", "properties": { "name": { "type": "STRING", "description": "El nombre del proyecto." }, "description": { "type": "STRING", "description": "Una descripción detallada del proyecto (opcional)." } }, "required": ["name"] }
     },
     {
         "name": "create_task",
         "description": "Crea una nueva tarea y la asigna a un proyecto existente del usuario. Útil cuando el usuario quiere añadir una nueva tarea, ítem por hacer, o acción a un proyecto.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "project_name": {
-                    "type": "STRING",
-                    "description": "El nombre del proyecto al que pertenece la tarea."
-                },
-                "description": {
-                    "type": "STRING",
-                    "description": "La descripción de la tarea a realizar."
-                },
-                "status": {
-                    "type": "STRING",
-                    "description": "El estado actual de la tarea. Valores permitidos: 'todo', 'doing', 'done'. Por defecto es 'todo' si no se especifica.",
-                    "enum": ["todo", "doing", "done"] # Ayuda a Gemini a restringir los valores
-                },
-                "due_date": {
-                    "type": "STRING",
-                    "description": "La fecha de vencimiento de la tarea en formato AAAA-MM-DD (opcional)."
-                }
-            },
-            "required": ["project_name", "description"]
-        }
+        "parameters": { "type": "OBJECT", "properties": { "project_name": { "type": "STRING", "description": "El nombre del proyecto existente al que pertenece la tarea." }, "description": { "type": "STRING", "description": "La descripción de la tarea a realizar." }, "status": { "type": "STRING", "description": "El estado actual de la tarea. Valores permitidos: 'todo', 'doing', 'done'. Por defecto es 'todo' si no se especifica.", "enum": ["todo", "doing", "done"] }, "due_date": { "type": "STRING", "description": "La fecha de vencimiento de la tarea en formato AAAA-MM-DD (opcional)." } }, "required": ["project_name", "description"] }
+    },
+    {
+        "name": "extract_expense_data",
+        "description": "Extrae la información detallada de un gasto o transacción financiera a partir de la instrucción del usuario. El objetivo es recopilar los detalles para una posterior confirmación antes de registrar el gasto.",
+        "parameters": { "type": "OBJECT", "properties": { "description": { "type": "STRING", "description": "La descripción detallada del gasto (ej. 'Almuerzo con cliente X', 'Compra de licencia de software Y')." }, "amount": { "type": "NUMBER", "description": "El monto numérico del gasto (ej. 25.50, 100)." }, "transaction_date": { "type": "STRING", "description": "La fecha en que se realizó el gasto, en formato AAAA-MM-DD (ej. '2024-07-15'). Si el usuario no especifica una fecha, no incluyas este campo o déjalo vacío." }, "category_name_guess": { "type": "STRING", "description": "El nombre de una categoría DE GASTOS *existente* a la que este gasto podría pertenecer (ej. 'Comida', 'Transporte', 'Software'). Si no estás seguro o el usuario no lo menciona, omite este campo." }, "project_name_guess": { "type": "STRING", "description": "El nombre de un proyecto *existente* al que este gasto podría estar asociado. Si el usuario no menciona un proyecto o si el gasto parece personal, omite este campo." } }, "required": ["description", "amount"] }
     }
 ]
 
-# Nota sobre CSRF:
-# Si vas a probar este endpoint desde una herramienta externa (como Postman)
-# que no envía automáticamente el token CSRF, puedes usar @csrf_exempt temporalmente.
-# Para un frontend web con JavaScript, asegúrate de incluir el token CSRF en tus solicitudes AJAX.
-# @csrf_exempt # Descomentar SOLO para pruebas con herramientas externas si es necesario.
-
-
-@login_required # Asegura que el usuario esté autenticado
-@require_POST # Asegura que este endpoint solo acepte solicitudes POST
+# Vista del manejador de comandos IA
+@login_required
+@require_POST
 def ai_command_handler(request):
+    # --- MODIFICADO: Añadido bloque try...except principal para capturar errores de Gemini ---
     try:
-        # 1. Obtener la clave de API de forma segura
+        # 1. Configurar API Key
         api_key = os.getenv('GOOGLE_API_KEY')
         if not api_key:
-            print("ERROR: GOOGLE_API_KEY no encontrada en el entorno.")
-            return JsonResponse({'error': 'API Key no configurada en el servidor.'}, status=500)
+            print("ERROR: GOOGLE_API_KEY no encontrada.")
+            return JsonResponse({'error': 'API Key no configurada.'}, status=500)
         genai.configure(api_key=api_key)
 
-        # 2. Parsear la instrucción del usuario desde el cuerpo de la solicitud JSON
+        # 2. Parsear JSON y determinar acción
         try:
             data = json.loads(request.body)
-            user_instruction = data.get('instruction')
+            action = data.get('action')
         except json.JSONDecodeError:
-            return JsonResponse({'error': 'Cuerpo de la solicitud JSON inválido o vacío.'}, status=400)
+            return JsonResponse({'error': 'JSON inválido.'}, status=400)
 
+        # Manejo de la acción de confirmación (para gastos)
+        if action == 'confirm_creation':
+            confirmed_data = data.get('confirmed_data')
+            if not confirmed_data:
+                 return JsonResponse({'error': 'Datos de confirmación no proporcionados.'}, status=400)
 
+            print(f"DEBUG: [AI Handler] Recibida confirmación con datos: {confirmed_data}")
+
+            try:
+                # Llamar al servicio de accounting para crear la transacción
+                transaction = create_transaction_from_data(
+                    user=request.user,
+                    description=confirmed_data.get('description'),
+                    amount=confirmed_data.get('amount'),
+                    transaction_date_str=confirmed_data.get('transaction_date'),
+                    category_name=confirmed_data.get('category_name'),
+                    project_name=confirmed_data.get('project_name')
+                )
+                # Éxito al crear
+                return JsonResponse({
+                    'message': f"Gasto '{transaction.description[:30]}...' registrado exitosamente.",
+                    'transaction_id': transaction.id,
+                    'type': 'transaction_created'
+                    })
+            except (ValueError, TypeError) as e:
+                print(f"ERROR: [AI Handler] Error al crear transacción: {str(e)}")
+                return JsonResponse({'error': f"Error al registrar el gasto: {str(e)}"}, status=400)
+
+        # Si no es confirmación, procesar instrucción normal
+        user_instruction = data.get('instruction')
         if not user_instruction:
-            return JsonResponse({'error': 'Instrucción no proporcionada.'}, status=400)
+             return JsonResponse({'error': 'Instrucción no proporcionada.'}, status=400)
 
-        # 3. Preparar el modelo Gemini con las herramientas (nuestras funciones)
-        # Consulta la documentación de Gemini para el nombre exacto del modelo recomendado.
+        # 3. Preparar y llamar a Gemini
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash-latest', # O 'gemini-1.0-pro', etc.
+            model_name='gemini-1.5-flash-latest',
             tools=GEMINI_FUNCTION_DECLARATIONS,
-            safety_settings={ # Configuración de seguridad básica
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            safety_settings={
+                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                 HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                 HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                 HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
             }
         )
-        # Iniciamos una sesión de chat. enable_automatic_function_calling=False para control manual.
         chat = model.start_chat(enable_automatic_function_calling=False)
+        print(f"DEBUG: [AI Handler] Enviando a Gemini: '{user_instruction}' para {request.user.username}")
 
-        # 4. Enviar la instrucción del usuario a Gemini
-        print(f"DEBUG: [AI Handler] Enviando a Gemini: '{user_instruction}' para el usuario {request.user.username}")
+        # --- Llamada a Gemini ahora dentro del try principal ---
         response = chat.send_message(user_instruction)
-        
-        # 5. Procesar la respuesta de Gemini para llamadas a función
-        # Accedemos a la primera parte del primer candidato (puede haber varios candidatos)
-        if not response.candidates or not response.candidates[0].content.parts:
-            print(f"DEBUG: [AI Handler] Respuesta de Gemini inesperada o vacía: {response.prompt_feedback}")
-            # Si el prompt fue bloqueado, prompt_feedback puede dar información.
-            if response.prompt_feedback and response.prompt_feedback.block_reason:
-                 return JsonResponse({'error': f'La instrucción fue bloqueada por seguridad: {response.prompt_feedback.block_reason_message}'}, status=400)
-            return JsonResponse({'message': response.text if hasattr(response, 'text') else 'No se pudo obtener una respuesta clara de la IA.'})
 
-        # Intentar acceder a function_call
+        # 4. Procesar respuesta de Gemini (si no hubo excepción en send_message)
+        # (La lógica de procesamiento se mueve dentro del try general)
+        if not response.candidates or not response.candidates[0].content.parts:
+            print(f"DEBUG: [AI Handler] Respuesta Gemini inesperada: {response.prompt_feedback}")
+            # Manejar bloqueo por seguridad aquí si es necesario, aunque StopCandidateException lo hará
+            if response.prompt_feedback and response.prompt_feedback.block_reason == 'SAFETY':
+                 return JsonResponse({'error': 'La instrucción fue bloqueada por motivos de seguridad.'}, status=400)
+            return JsonResponse({'message': response.text if hasattr(response, 'text') else 'Respuesta IA no clara.'})
+
+
         try:
             function_call_part = response.candidates[0].content.parts[0]
-            if hasattr(function_call_part, 'function_call'):
-                function_call = function_call_part.function_call
-            else:
-                function_call = None # No es una llamada a función
+            function_call = getattr(function_call_part, 'function_call', None)
         except IndexError:
-             print(f"DEBUG: [AI Handler] No se encontraron 'parts' en la respuesta de Gemini.")
-             return JsonResponse({'message': response.text if hasattr(response, 'text') else 'Respuesta de IA sin partes procesables.'})
-
+             print(f"DEBUG: [AI Handler] Respuesta Gemini sin 'parts'.")
+             return JsonResponse({'message': response.text if hasattr(response, 'text') else 'Respuesta IA no procesable.'})
 
         if function_call:
             function_name = function_call.name
-            args = function_call.args
-            args_dict = {key: value for key, value in args.items()}
-
+            args_dict = {key: value for key, value in function_call.args.items()}
             print(f"DEBUG: [AI Handler] Gemini quiere llamar a '{function_name}' con args: {args_dict}")
 
+            # Manejo de llamadas a función específicas
             if function_name == "create_project":
                 project_name = args_dict.get("name")
-                description = args_dict.get("description") # Puede ser None
-                if not project_name:
-                    # (Opcional) Aquí podrías volver a llamar a Gemini pidiendo el nombre
-                    return JsonResponse({'error': "Gemini no proporcionó un nombre para el proyecto."}, status=400)
-                
+                description = args_dict.get("description")
+                if not project_name: return JsonResponse({'error': "Nombre proyecto faltante (IA)."}, status=400)
                 try:
                     project = create_project_for_user(request.user, project_name, description)
-                    final_user_message = f"Proyecto '{project.name}' creado exitosamente."
-                    print(f"INFO: [AI Handler] {final_user_message}")
-                    return JsonResponse({'message': final_user_message, 'project_id': project.id, 'type': 'project_created'})
-                except ValueError as e:
-                    print(f"ERROR: [AI Handler] Error al crear proyecto: {str(e)}")
-                    return JsonResponse({'error': f"Error al crear proyecto: {str(e)}"}, status=400)
+                    return JsonResponse({'message': f"Proyecto '{project.name}' creado.", 'project_id': project.id, 'type': 'project_created'})
+                except ValueError as e: return JsonResponse({'error': f"Error creando proyecto: {str(e)}"}, status=400)
 
             elif function_name == "create_task":
-                project_name_for_task = args_dict.get("project_name")
-                task_description = args_dict.get("description")
-                status = args_dict.get("status", "todo") 
+                project_name = args_dict.get("project_name")
+                task_desc = args_dict.get("description")
+                status = args_dict.get("status", "todo")
                 due_date_str = args_dict.get("due_date")
-
-                if not project_name_for_task or not task_description:
-                    return JsonResponse({'error': "Gemini no proporcionó nombre de proyecto o descripción de tarea."}, status=400)
-
+                if not project_name or not task_desc: return JsonResponse({'error': "Faltan datos tarea (IA)."}, status=400)
                 try:
-                    project_obj = get_project_by_user_and_name(request.user, project_name_for_task)
-                    
+                    project_obj = get_project_by_user_and_name(request.user, project_name)
                     parsed_due_date = None
                     if due_date_str:
-                        try:
-                            from datetime import datetime # Importación local
-                            parsed_due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
-                        except ValueError:
-                            print(f"WARN: [AI Handler] Formato de fecha inválido '{due_date_str}' recibido de Gemini. Se ignorará la fecha.")
-                            # Podrías informar al usuario que la fecha no se pudo parsear
-                            # O intentar preguntarle de nuevo a Gemini por una fecha válida.
-                            pass # Se usará None
+                        try: parsed_due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+                        except ValueError: print(f"WARN: Fecha tarea inválida '{due_date_str}'.")
+                    task = create_task_for_project(project_obj, task_desc, status, parsed_due_date)
+                    return JsonResponse({'message': f"Tarea '{task.description[:30]}...' añadida a '{project_obj.name}'.", 'task_id': task.id, 'type': 'task_created'})
+                except Project.DoesNotExist: return JsonResponse({'error': f"Proyecto '{project_name}' no encontrado."}, status=404)
+                except ValueError as e: return JsonResponse({'error': f"Error creando tarea: {str(e)}"}, status=400)
 
-                    task = create_task_for_project(project_obj, task_description, status, parsed_due_date)
-                    final_user_message = f"Tarea '{task.description[:30]}...' añadida al proyecto '{project_obj.name}'."
-                    print(f"INFO: [AI Handler] {final_user_message}")
-                    return JsonResponse({'message': final_user_message, 'task_id': task.id, 'type': 'task_created'})
-                except Project.DoesNotExist:
-                    print(f"WARN: [AI Handler] Proyecto '{project_name_for_task}' no encontrado para {request.user.username}.")
-                    return JsonResponse({'error': f"El proyecto '{project_name_for_task}' no fue encontrado. ¿Quizás quisiste decir otro nombre o necesitas crearlo primero?"}, status=404)
-                except ValueError as e:
-                    print(f"ERROR: [AI Handler] Error al crear tarea: {str(e)}")
-                    return JsonResponse({'error': f"Error al crear tarea: {str(e)}"}, status=400)
-            
+            elif function_name == "extract_expense_data":
+                 description = args_dict.get("description")
+                 amount = args_dict.get("amount")
+                 if not description or amount is None:
+                     return JsonResponse({'error': "IA no extrajo descripción o monto."}, status=400)
+                 extracted_data = {
+                    "description": description,
+                    "amount": amount,
+                    "transaction_date": args_dict.get("transaction_date"),
+                    "category_name": args_dict.get("category_name_guess"),
+                    "project_name": args_dict.get("project_name_guess")
+                 }
+                 print(f"DEBUG: [AI Handler] Datos gasto para confirmar: {extracted_data}")
+                 return JsonResponse({
+                    "action_needed": "confirm_expense",
+                    "message": "Por favor, confirma los detalles del gasto extraídos:",
+                    "extracted_data": extracted_data
+                 })
+
             else:
-                print(f"WARN: [AI Handler] Función desconocida solicitada por Gemini: {function_name}")
-                return JsonResponse({'error': f"Función desconocida solicitada por Gemini: {function_name}"}, status=400)
+                 print(f"WARN: [AI Handler] Función desconocida: {function_name}")
+                 return JsonResponse({'error': f"Función IA desconocida: {function_name}"}, status=400)
         else:
-            # Si Gemini no devuelve una llamada a función, devolvemos su texto.
-            print(f"DEBUG: [AI Handler] Gemini respondió con texto: '{response.text if hasattr(response, 'text') else 'Respuesta vacía'}'")
-            return JsonResponse({'message': response.text if hasattr(response, 'text') else 'La IA no sugirió una acción específica.'})
+            # Respuesta de texto normal de Gemini
+            print(f"DEBUG: [AI Handler] Respuesta texto Gemini: '{response.text if hasattr(response, 'text') else ''}'")
+            return JsonResponse({'message': response.text if hasattr(response, 'text') else 'IA no sugirió acción específica.'})
+
+    # --- MODIFICADO: Captura específica para errores de Gemini y otros ---
+    except StopCandidateException as e:
+        # Error específico cuando Gemini detiene la generación (por seguridad, llamada mal formada, etc.)
+        print(f"ERROR: [AI Handler] StopCandidateException: Reason={e.finish_reason}, Message={str(e)}")
+        error_message = "La IA no pudo completar la solicitud."
+        # Intentar obtener el finish_reason si existe
+        finish_reason = getattr(e, 'finish_reason', 'UNKNOWN').upper()
+
+        if finish_reason == "MALFORMED_FUNCTION_CALL":
+            error_message = "La IA no pudo procesar la instrucción compleja. Por favor, intenta dar instrucciones más simples y separadas (una acción principal a la vez)."
+        elif finish_reason == "SAFETY":
+             error_message = "La instrucción fue bloqueada por motivos de seguridad."
+        elif finish_reason == "RECITATION":
+             error_message = "La respuesta fue bloqueada por posible recitación de contenido protegido."
+        elif finish_reason == "OTHER":
+             error_message = "La respuesta fue detenida por una razón no especificada por la IA."
+
+        # Devolver un 400 Bad Request porque el problema está relacionado con la instrucción o el procesamiento de la IA
+        return JsonResponse({'error': error_message}, status=400)
 
     except Exception as e:
-        # Captura general de errores para depuración
-        import traceback # Para obtener más detalles del error
+        # Captura general de otros errores inesperados (conexión, código Python, etc.)
         print(f"CRITICAL ERROR en ai_command_handler: {type(e).__name__} - {str(e)}")
         print(traceback.format_exc()) # Imprime el stack trace completo del error
-        return JsonResponse({'error': 'Ocurrió un error inesperado y crítico en el servidor.'}, status=500)
-    
+        # Devolver un 500 Internal Server Error
+        return JsonResponse({'error': 'Ocurrió un error crítico inesperado en el servidor.'}, status=500)
+    # --- FIN MODIFICADO ---
