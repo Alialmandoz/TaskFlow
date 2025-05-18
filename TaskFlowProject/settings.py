@@ -31,7 +31,7 @@ SECRET_KEY = 'django-insecure-fok@f_mk=_!+i3%fj=dcv#y)#o)tx1l=g6z$_ziiv%ig&gn_(d
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY') # <-- Recupera la clave usando os.getenv()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = []
 

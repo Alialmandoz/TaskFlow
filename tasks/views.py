@@ -6,9 +6,9 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 import json
 import os
-from datetime import datetime # Sigue siendo necesaria para parsear fechas que Gemini devuelve
+from datetime import datetime
 import traceback
-from django.utils import timezone # <-- AÑADIDO: Para obtener la fecha actual del servidor con zona horaria
+from django.utils import timezone
 
 # Importaciones de Gemini
 import google.generativeai as genai
@@ -22,7 +22,7 @@ from .forms import ProjectForm, TaskForm
 from .services import create_project_for_user, create_task_for_project, get_project_by_user_and_name
 
 # Importaciones de Accounting
-from accounting.models import Category # Transaction no se usa directamente aquí, pero Category podría ser útil
+from accounting.models import Category # <-- Necesario para obtener las categorías del usuario
 from accounting.services import create_transaction_from_data
 
 
@@ -83,7 +83,7 @@ GEMINI_FUNCTION_DECLARATIONS = [
     {
         "name": "extract_expense_data",
         "description": "Extrae la información detallada de un gasto o transacción financiera a partir de la instrucción del usuario. El objetivo es recopilar los detalles para una posterior confirmación antes de registrar el gasto. Se le proveerá la fecha actual como contexto.",
-        "parameters": { "type": "OBJECT", "properties": { "description": { "type": "STRING", "description": "La descripción detallada del gasto (ej. 'Almuerzo con cliente X', 'Compra de licencia de software Y')." }, "amount": { "type": "NUMBER", "description": "El monto numérico del gasto (ej. 25.50, 100)." }, "transaction_date": { "type": "STRING", "description": "La fecha en que se realizó el gasto, en formato AAAA-MM-DD (ej. '2024-07-15'). Si el usuario menciona una fecha relativa (ayer, hoy, mañana), debe ser resuelta a una fecha absoluta AAAA-MM-DD basada en la fecha actual proporcionada." }, "category_name_guess": { "type": "STRING", "description": "El nombre de una categoría DE GASTOS *existente* a la que este gasto podría pertenecer (ej. 'Comida', 'Transporte', 'Software'). Si no estás seguro o el usuario no lo menciona, omite este campo." }, "project_name_guess": { "type": "STRING", "description": "El nombre de un proyecto *existente* al que este gasto podría estar asociado. Si el usuario no menciona un proyecto o si el gasto parece personal, omite este campo." } }, "required": ["description", "amount"] }
+        "parameters": { "type": "OBJECT", "properties": { "description": { "type": "STRING", "description": "La descripción detallada del gasto (ej. 'Almuerzo con cliente X', 'Compra de licencia de software Y')." }, "amount": { "type": "NUMBER", "description": "El monto numérico del gasto (ej. 25.50, 100)." }, "transaction_date": { "type": "STRING", "description": "La fecha en que se realizó el gasto, en formato AAAA-MM-DD (ej. '2024-07-15'). Si el usuario menciona una fecha relativa (ayer, hoy, mañana), debe ser resuelta a una fecha absoluta AAAA-MM-DD basada en la fecha actual proporcionada." }, "category_name_guess": { "type": "STRING", "description": "El nombre de una categoría DE GASTOS *existente* a la que este gasto podría pertenecer (ej. 'Comida', 'Transporte', 'Software'). Si el usuario no menciona una categoría o si la categoría mencionada no parece existir, este campo puede omitirse o dejarse vacío." }, "project_name_guess": { "type": "STRING", "description": "El nombre de un proyecto *existente* al que este gasto podría estar asociado. Si el usuario no menciona un proyecto o si el gasto parece personal, omite este campo." } }, "required": ["description", "amount"] }
     }
 ]
 
@@ -91,7 +91,7 @@ GEMINI_FUNCTION_DECLARATIONS = [
 @login_required
 @require_POST
 def ai_command_handler(request):
-    user_instruction_original = None # Guardará la instrucción pura del usuario
+    user_instruction_original = None
     try:
         api_key = os.getenv('GOOGLE_API_KEY')
         if not api_key:
@@ -103,7 +103,7 @@ def ai_command_handler(request):
             data = json.loads(request.body)
             action = data.get('action')
             if 'instruction' in data:
-                user_instruction_original = data.get('instruction') # Captura la instrucción original
+                user_instruction_original = data.get('instruction')
         except json.JSONDecodeError:
             return JsonResponse({'error': 'JSON inválido.'}, status=400)
 
@@ -113,14 +113,24 @@ def ai_command_handler(request):
                  return JsonResponse({'error': 'Datos de confirmación no proporcionados.'}, status=400)
             print(f"DEBUG: [AI Handler] Recibida confirmación con datos: {confirmed_data}")
             original_instruction_for_expense = confirmed_data.pop('_original_user_instruction', None)
+            
+            # --- MODIFICADO: Extraer los nuevos campos de categoría del frontend ---
+            selected_category_id = confirmed_data.get('selected_category_id')
+            create_category_name = confirmed_data.get('create_category_with_name')
+            # --- FIN MODIFICADO ---
+
             try:
                 transaction = create_transaction_from_data(
                     user=request.user,
                     description=confirmed_data.get('description'),
                     amount=confirmed_data.get('amount'),
                     transaction_date_str=confirmed_data.get('transaction_date'),
-                    category_name=confirmed_data.get('category_name'),
+                    # --- MODIFICADO: Pasar nuevos parámetros de categoría al servicio ---
+                    selected_category_id=selected_category_id,
+                    create_category_with_name=create_category_name,
+                    # project_name sigue igual
                     project_name=confirmed_data.get('project_name'),
+                    # --- FIN MODIFICADO ---
                     original_instruction=original_instruction_for_expense
                 )
                 return JsonResponse({
@@ -135,12 +145,10 @@ def ai_command_handler(request):
         if not user_instruction_original:
              return JsonResponse({'error': 'Instrucción no proporcionada para procesar por IA.'}, status=400)
 
-        # --- AÑADIDO: Preparar contexto de fecha actual para Gemini ---
         current_server_date = timezone.localdate().strftime("%Y-%m-%d")
-        # Prefijamos la instrucción del usuario con el contexto de la fecha actual
-        # La 'original_instruction' que guardamos sigue siendo la del usuario puro.
-        instruction_for_gemini = f"Contexto: Hoy es {current_server_date}. Instrucción del usuario: {user_instruction_original}"
-        # --- FIN AÑADIDO ---
+        instruction_for_gemini = f"Contexto: Hoy es {current_server_date}. Mis categorías de gastos existentes son: [{', '.join(c.name for c in Category.objects.filter(user=request.user))}]. Instrucción del usuario: {user_instruction_original}"
+        
+        print(f"DEBUG: [AI Handler] Enviando a Gemini (con contexto de fecha y categorías): '{instruction_for_gemini}' para {request.user.username}")
 
         model = genai.GenerativeModel(
             model_name='gemini-1.5-flash-latest',
@@ -153,10 +161,7 @@ def ai_command_handler(request):
             }
         )
         chat = model.start_chat(enable_automatic_function_calling=False)
-        # --- MODIFICADO: Enviar la instrucción con contexto a Gemini ---
-        print(f"DEBUG: [AI Handler] Enviando a Gemini (con contexto de fecha): '{instruction_for_gemini}' para {request.user.username}")
         response = chat.send_message(instruction_for_gemini)
-        # --- FIN MODIFICADO ---
 
         if not response.candidates or not response.candidates[0].content.parts:
             print(f"DEBUG: [AI Handler] Respuesta Gemini inesperada: {response.prompt_feedback}")
@@ -177,18 +182,18 @@ def ai_command_handler(request):
             print(f"DEBUG: [AI Handler] Gemini quiere llamar a '{function_name}' con args: {args_dict}")
 
             if function_name == "create_project":
+                # ... (sin cambios, solo pasa user_instruction_original)
                 project_name = args_dict.get("name")
                 description = args_dict.get("description")
                 if not project_name: return JsonResponse({'error': "Nombre proyecto faltante (IA)."}, status=400)
                 try:
-                    project = create_project_for_user(
-                        request.user, project_name, description,
-                        original_instruction=user_instruction_original # Usar la instrucción original sin prefijo
-                    )
+                    project = create_project_for_user(request.user, project_name, description, original_instruction=user_instruction_original)
                     return JsonResponse({'message': f"Proyecto '{project.name}' creado.", 'project_id': project.id, 'type': 'project_created'})
                 except ValueError as e: return JsonResponse({'error': f"Error creando proyecto: {str(e)}"}, status=400)
 
+
             elif function_name == "create_task":
+                # ... (sin cambios, solo pasa user_instruction_original)
                 project_name_for_task = args_dict.get("project_name")
                 task_description = args_dict.get("description")
                 status = args_dict.get("status", "todo")
@@ -200,10 +205,7 @@ def ai_command_handler(request):
                     if due_date_str:
                         try: parsed_due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
                         except ValueError: print(f"WARN: Fecha tarea inválida '{due_date_str}'.")
-                    task = create_task_for_project(
-                        project_obj, task_description, status, parsed_due_date,
-                        original_instruction=user_instruction_original # Usar la instrucción original sin prefijo
-                    )
+                    task = create_task_for_project(project_obj, task_description, status, parsed_due_date, original_instruction=user_instruction_original)
                     return JsonResponse({'message': f"Tarea '{task.description[:30]}...' añadida a '{project_obj.name}'.", 'task_id': task.id, 'type': 'task_created'})
                 except Project.DoesNotExist: return JsonResponse({'error': f"Proyecto '{project_name_for_task}' no encontrado."}, status=404)
                 except ValueError as e: return JsonResponse({'error': f"Error creando tarea: {str(e)}"}, status=400)
@@ -213,19 +215,26 @@ def ai_command_handler(request):
                  amount = args_dict.get("amount")
                  if not description or amount is None:
                      return JsonResponse({'error': "IA no extrajo descripción o monto."}, status=400)
+                 
+                 # --- AÑADIDO: Obtener todas las categorías del usuario ---
+                 user_categories_list = list(Category.objects.filter(user=request.user).values('id', 'name').order_by('name'))
+                 # --- FIN AÑADIDO ---
+
                  extracted_data = {
                     "description": description,
                     "amount": amount,
                     "transaction_date": args_dict.get("transaction_date"),
-                    "category_name": args_dict.get("category_name_guess"),
-                    "project_name": args_dict.get("project_name_guess"),
-                    "_original_user_instruction": user_instruction_original # Usar la instrucción original sin prefijo
+                    "category_name_guess": args_dict.get("category_name_guess"), # La IA puede seguir adivinando
+                    "project_name_guess": args_dict.get("project_name_guess"),
+                    "_original_user_instruction": user_instruction_original
                  }
                  print(f"DEBUG: [AI Handler] Datos gasto para confirmar: {extracted_data}")
                  return JsonResponse({
                     "action_needed": "confirm_expense",
                     "message": "Por favor, confirma los detalles del gasto extraídos:",
-                    "extracted_data": extracted_data
+                    "extracted_data": extracted_data,
+                    # --- AÑADIDO: Enviar lista de categorías al frontend ---
+                    "user_categories": user_categories_list
                  })
             else:
                  print(f"WARN: [AI Handler] Función desconocida: {function_name}")

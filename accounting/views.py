@@ -2,50 +2,73 @@
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.urls import reverse_lazy # Para redirecciones después del éxito
-from .forms import TransactionForm # Importamos nuestro nuevo formulario
-from .models import Transaction # Importamos el modelo por si necesitamos interactuar directamente
+from django.urls import reverse_lazy
+# --- MODIFICADO: Importar el nuevo formulario de filtro ---
+from .forms import TransactionForm, TransactionFilterForm
+from .models import Transaction, Category # Category para el filtro
+# --- FIN MODIFICADO ---
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger # Para paginación
 
-@login_required # Solo usuarios logueados pueden acceder
+@login_required
 def transaction_create(request):
-    """
-    Vista para manejar la creación de nuevas transacciones (gastos).
-    """
     if request.method == 'POST':
-        # Al instanciar el formulario con datos POST, pasamos el request.user
-        # para que el __init__ del formulario pueda filtrar los querysets.
         form = TransactionForm(request.POST, user=request.user)
         if form.is_valid():
-            # Creamos la instancia de la transacción pero sin guardarla aún (commit=False)
             transaction = form.save(commit=False)
-            # Asignamos el usuario actual a la transacción
             transaction.user = request.user
-            # Si el tipo es fijo y no está en el form, asignarlo aquí:
-            # transaction.type = 'expense' # Aunque ya está en el form con default
-            
-            transaction.save() # Guardamos la transacción en la base de datos
-            
-            # Redirigir a alguna página después de guardar exitosamente.
-            # Podría ser una lista de transacciones o de vuelta al dashboard.
-            # Por ahora, vamos a asumir que tenemos una lista de transacciones más adelante.
-            # Si no, podemos redirigir al dashboard de 'tasks'.
-            # return redirect('accounting:transaction_list') # Cuando la tengamos
-            return redirect(reverse_lazy('tasks:project_list')) # Redirige al dashboard principal por ahora
-    else: # Si la solicitud es GET (o cualquier otro método)
-        # Al instanciar el formulario vacío para una solicitud GET, también pasamos el request.user
+            transaction.save()
+            # --- MODIFICADO: Redirigir a la nueva lista de transacciones ---
+            return redirect(reverse_lazy('accounting:transaction_list'))
+    else:
         form = TransactionForm(user=request.user)
-
-    # Renderizamos la plantilla, pasando el formulario.
-    # Crearemos 'accounting/transaction_form.html' en el siguiente paso.
     context = {
         'form': form,
-        'page_title': 'Registrar Nuevo Gasto' # Título para la plantilla
+        'page_title': 'Registrar Nuevo Gasto'
     }
     return render(request, 'accounting/transaction_form.html', context)
 
-# Aquí iría la vista transaction_list más adelante
-# @login_required
-# def transaction_list(request):
-#     transactions = Transaction.objects.filter(user=request.user)
-#     context = {'transactions': transactions}
-#     return render(request, 'accounting/transaction_list.html', context)
+# --- AÑADIDO: Vista para listar transacciones ---
+@login_required
+def transaction_list(request):
+    """
+    Muestra una lista paginada de transacciones (gastos) para el usuario actual,
+    con la opción de filtrar por categoría.
+    """
+    transactions_qs = Transaction.objects.filter(user=request.user, type='expense').select_related(
+        'category', 'project' # Optimizar para acceso en plantilla
+    ).order_by('-transaction_date', '-created_at')
+
+    # Inicializar el formulario de filtro (pasando el usuario para poblar categorías)
+    filter_form = TransactionFilterForm(request.GET or None, user=request.user)
+
+    if filter_form.is_valid():
+        category_filter = filter_form.cleaned_data.get('category')
+        if category_filter:
+            transactions_qs = transactions_qs.filter(category=category_filter)
+        # Aquí se podrían añadir más filtros si el formulario los tuviera
+        # start_date = filter_form.cleaned_data.get('start_date')
+        # end_date = filter_form.cleaned_data.get('end_date')
+        # if start_date:
+        #     transactions_qs = transactions_qs.filter(transaction_date__gte=start_date)
+        # if end_date:
+        #     transactions_qs = transactions_qs.filter(transaction_date__lte=end_date)
+
+    # Paginación
+    paginator = Paginator(transactions_qs, 10) # Mostrar 10 transacciones por página
+    page_number = request.GET.get('page')
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        # Si page no es un entero, entregar la primera página.
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        # Si page está fuera de rango (ej. 9999), entregar la última página de resultados.
+        page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        'page_obj': page_obj, # Objeto de página para la plantilla (contiene las transacciones de la página actual)
+        'filter_form': filter_form,
+        'page_title': 'Mis Gastos Registrados'
+    }
+    return render(request, 'accounting/transaction_list.html', context)
+# --- FIN AÑADIDO ---

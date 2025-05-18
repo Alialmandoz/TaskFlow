@@ -1,7 +1,8 @@
 {# D:\trabajo\Propio\IA\programing\TaskFlow\dashboard\templates\dashboard\dashboard.html #}
-{% extends "tasks/base.html" %}
+{% extends "tasks/base.html" %} {# Heredamos de la plantilla base existente #}
 {% load l10n %}
 {% load tz %}
+{% load static %} {# <-- AÑADIDO: Cargar la etiqueta static #}
 
 {% block title %}Dashboard - TaskFlow{% endblock %}
 
@@ -9,22 +10,18 @@
     {# Sección de la Consola de IA #}
     <section id="ai-console-section" style="margin-bottom: 30px; padding: 20px; background-color: #e9f7fd; border-radius: 5px;">
         <h2>Crear con IA</h2>
-        <form id="aiCommandForm">
+        <form id="aiCommandForm"> {# El CSRF token es crucial para las peticiones POST del JS #}
             {% csrf_token %}
             <div>
-                {# --- MODIFICADO: Placeholder actualizado --- #}
                 <textarea id="instruction" name="instruction" rows="3"
                           placeholder="Describe una acción principal: Crear proyecto 'X', añadir tarea 'Y' a proyecto 'X', o registrar gasto 'Z'..." required></textarea>
-                {# --- FIN MODIFICADO --- #}
             </div>
             <button type="submit" class="btn btn-primary">Enviar Instrucción</button>
         </form>
         <div id="responseArea" class="mt-3">
             Esperando instrucción...
         </div>
-        {# --- AÑADIDO: Nota de consejo para el usuario --- #}
         <small class="form-text text-muted mt-2">Consejo: Intenta una acción principal por cada instrucción para mejores resultados.</small>
-        {# --- FIN AÑADIDO --- #}
     </section>
     {# Fin Sección de la Consola de IA #}
 
@@ -40,15 +37,23 @@
                     <ul class="project-list" style="padding-left: 0; list-style: none;">
                         {% for project in projects %}
                             <li class="project-list-item" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
-                                <h3><a href="{% url 'tasks:project_detail' pk=project.pk %}">{{ project.name }}</a></h3>
-                                {% if project.description %}<p style="font-size: 0.9em; color: #6c757d;">{{ project.description }}</p>{% endif %}
+                                <h3>
+                                    <a href="{% url 'tasks:project_detail' pk=project.pk %}">{{ project.name }}</a>
+                                </h3>
+                                {% if project.description %}
+                                    <p style="font-size: 0.9em; color: #6c757d;">{{ project.description }}</p>
+                                {% endif %}
+
                                 <h4>Tareas:</h4>
                                 {% if project.task_set.all %}
                                     <ul class="task-list">
                                         {% for task in project.task_set.all %}
                                             <li class="task-list-item" style="padding: 5px 0; border-bottom: 1px dashed #e0e0e0;">
                                                  {{ task.description }}
-                                                <span style="font-size: 0.8em; color: #6c757d;">(Estado: {{ task.get_status_display }}) {% if task.due_date %} - Vence: {{ task.due_date|date:"d M Y" }}{% endif %}</span>
+                                                <span style="font-size: 0.8em; color: #6c757d;">
+                                                    (Estado: {{ task.get_status_display }})
+                                                    {% if task.due_date %} - Vence: {{ task.due_date|date:"d M Y" }}{% endif %}
+                                                </span>
                                             </li>
                                             {% if forloop.last %}<style>.task-list-item:last-child { border-bottom: none; }</style>{% endif %}
                                         {% endfor %}
@@ -75,8 +80,22 @@
                         {% for transaction in recent_transactions %}
                             <li class="expense-list-item" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
                                 <p style="margin-bottom: 5px;"><strong>{{ transaction.description }}</strong></p>
-                                <p style="margin-bottom: 5px; font-size: 1.1em; color: #dc3545;">{{ transaction.amount|floatformat:2 }} € <span style="font-size: 0.8em; color: #6c757d; margin-left: 10px;">({{ transaction.transaction_date|date:"d M Y" }})</span></p>
-                                <p style="font-size: 0.9em; color: #6c757d; margin-bottom: 0;">{% if transaction.category %}Categoría: {{ transaction.category.name }}{% else %}Sin categoría{% endif %}{% if transaction.project %} | Proyecto: {{ transaction.project.name }}{% endif %}</p>
+                                <p style="margin-bottom: 5px; font-size: 1.1em; color: #dc3545;">
+                                    {{ transaction.amount|floatformat:2 }} €
+                                    <span style="font-size: 0.8em; color: #6c757d; margin-left: 10px;">
+                                        ({{ transaction.transaction_date|date:"d M Y" }})
+                                    </span>
+                                </p>
+                                <p style="font-size: 0.9em; color: #6c757d; margin-bottom: 0;">
+                                    {% if transaction.category %}
+                                        Categoría: {{ transaction.category.name }}
+                                    {% else %}
+                                        Sin categoría
+                                    {% endif %}
+                                    {% if transaction.project %}
+                                        | Proyecto: {{ transaction.project.name }}
+                                    {% endif %}
+                                </p>
                             </li>
                         {% endfor %}
                     </ul>
@@ -90,175 +109,13 @@
 {% endblock %}
 
 {% block javascript %}
-{# --- El bloque Javascript permanece igual --- #}
+{# --- MODIFICADO: Ahora solo definimos variables globales y enlazamos el script externo --- #}
 <script>
-    // Elementos del DOM
-    const aiCommandForm = document.getElementById('aiCommandForm');
-    const instructionTextarea = document.getElementById('instruction');
-    const responseArea = document.getElementById('responseArea');
-    const csrfTokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
-    const aiCommandHandlerUrl = "{% url 'tasks:ai_command_handler' %}";
-
-    // Verifica si los elementos esenciales existen
-    if (!aiCommandForm || !instructionTextarea || !responseArea || !csrfTokenInput || !aiCommandHandlerUrl) {
-        console.error('Error crítico: Faltan elementos esenciales del DOM o URL.');
-        if (responseArea) {
-             responseArea.innerHTML = '<p class="error">Error de inicialización del interfaz.</p>';
-        }
-    } else {
-        // Listener principal para el envío de instrucciones
-        aiCommandForm.addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const instruction = instructionTextarea.value.trim();
-            if (!instruction) return;
-
-            responseArea.innerHTML = '<p class="loading">Procesando tu instrucción...</p>';
-            instructionTextarea.value = '';
-
-            const currentCsrfToken = csrfTokenInput.value;
-
-            try {
-                const response = await fetch(aiCommandHandlerUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': currentCsrfToken
-                    },
-                    body: JSON.stringify({ instruction: instruction })
-                });
-
-                const data = await response.json();
-
-                 // Manejar respuesta OK o con error controlado (ej. 400 por MALFORMED_FUNCTION_CALL)
-                 // El JS ahora espera que los errores controlados vengan con una clave 'error'
-                if (response.ok || data.error) {
-                    if (data.action_needed === 'confirm_expense') {
-                        displayConfirmationUI(data);
-                    } else if (data.error) { // Mostrar error controlado (ej. el de MALFORMED_FUNCTION_CALL o seguridad)
-                         responseArea.innerHTML = `<p class="error"><strong>Error:</strong> ${data.error}</p>`;
-                    }
-                     else { // Respuesta OK normal (creación, mensaje texto)
-                        handleSuccessfulResponse(data);
-                    }
-                } else { // Errores no controlados (ej. 500)
-                    responseArea.innerHTML = `<p class="error"><strong>Error ${response.status}:</strong> ${data.error || 'Ocurrió un error inesperado en el servidor.'}</p>`;
-                }
-
-            } catch (error) {
-                console.error('Error en la solicitud inicial AI:', error);
-                responseArea.innerHTML = `<p class="error"><strong>Error de conexión o en el script:</strong> ${error.message}</p>`;
-            }
-        });
-    }
-
-    // Función para mostrar la UI de confirmación (sin cambios)
-    function displayConfirmationUI(data) {
-        responseArea.innerHTML = '';
-        const messageP = document.createElement('p');
-        messageP.textContent = data.message || 'Por favor, confirma los detalles:';
-        responseArea.appendChild(messageP);
-
-        const detailsDiv = document.createElement('div');
-        detailsDiv.style.marginBottom = '15px';
-        detailsDiv.style.padding = '10px';
-        detailsDiv.style.border = '1px solid #ccc';
-        detailsDiv.style.borderRadius = '4px';
-        detailsDiv.style.backgroundColor = '#f8f9fa';
-        for (const [key, value] of Object.entries(data.extracted_data)) {
-            if (value !== null && value !== undefined) {
-                const detailP = document.createElement('p');
-                detailP.style.margin = '5px 0';
-                const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                detailP.innerHTML = `<strong>${label}:</strong> ${value}`;
-                detailsDiv.appendChild(detailP);
-            }
-        }
-        responseArea.appendChild(detailsDiv);
-
-        const confirmButton = document.createElement('button');
-        confirmButton.textContent = 'Confirmar Gasto';
-        confirmButton.classList.add('btn', 'btn-success', 'me-2');
-        confirmButton.dataset.extracted = JSON.stringify(data.extracted_data);
-        confirmButton.addEventListener('click', handleExpenseConfirmation);
-        responseArea.appendChild(confirmButton);
-
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancelar';
-        cancelButton.classList.add('btn', 'btn-secondary');
-        cancelButton.addEventListener('click', cancelConfirmation);
-        responseArea.appendChild(cancelButton);
-    }
-
-    // Función para manejar el clic en "Confirmar Gasto" (sin cambios)
-    async function handleExpenseConfirmation(event) {
-        const button = event.target;
-        const extractedData = JSON.parse(button.dataset.extracted);
-
-        responseArea.innerHTML = '<p class="loading">Registrando el gasto...</p>';
-
-        const currentCsrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        if (!currentCsrfToken) {
-             console.error("Error crítico: No se encontró el token CSRF para la confirmación.");
-             responseArea.innerHTML = '<p class="error">Error: No se pudo enviar la confirmación (falta token CSRF).</p>';
-             return;
-        }
-
-        try {
-            const response = await fetch(aiCommandHandlerUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': currentCsrfToken
-                },
-                body: JSON.stringify({
-                    action: "confirm_creation",
-                    confirmed_data: extractedData
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                if (data.type === 'transaction_created') {
-                    handleSuccessfulResponse(data, true); // Forzar recarga
-                } else {
-                     handleSuccessfulResponse(data);
-                }
-            } else { // Error durante la confirmación/creación
-                 responseArea.innerHTML = `<p class="error"><strong>Error al registrar:</strong> ${data.error || 'Ocurrió un error desconocido.'}</p>`;
-            }
-
-        } catch (error) {
-            console.error('Error en la solicitud de confirmación:', error);
-            responseArea.innerHTML = `<p class="error"><strong>Error de conexión o en el script durante la confirmación:</strong> ${error.message}</p>`;
-        }
-    }
-
-    // Función para manejar el clic en "Cancelar" (sin cambios)
-    function cancelConfirmation() {
-        responseArea.innerHTML = 'Operación cancelada. Esperando instrucción...';
-    }
-
-    // Función para manejar respuestas exitosas generales (sin cambios)
-    function handleSuccessfulResponse(data, forceReload = false) {
-        let htmlResponse = '';
-        const isCreation = data.type === 'project_created' || data.type === 'task_created' || data.type === 'transaction_created';
-
-        if (isCreation) {
-            htmlResponse = `<p class="success"><strong>${data.message || 'Operación completada con éxito.'}</strong></p>`;
-            if (data.project_id) htmlResponse += `<p>ID del Proyecto: ${data.project_id}</p>`;
-            if (data.task_id) htmlResponse += `<p>ID de la Tarea: ${data.task_id}</p>`;
-            if (data.transaction_id) htmlResponse += `<p>ID de la Transacción: ${data.transaction_id}</p>`;
-        } else {
-            htmlResponse = `<p>${data.message || 'Respuesta recibida.'}</p>`;
-        }
-
-        responseArea.innerHTML = htmlResponse;
-
-        if (isCreation || forceReload) {
-            responseArea.innerHTML += '<p class="loading">Actualizando la página...</p>';
-            setTimeout(() => { window.location.reload(); }, 1500);
-        }
-    }
+    // Pasar URLs de Django al scope global de JavaScript para que el script externo las pueda usar.
+    // El script dashboard_logic.js esperará que esta variable esté definida.
+    window.AI_COMMAND_HANDLER_URL = "{% url 'tasks:ai_command_handler' %}";
 </script>
+{# Incluir el archivo JavaScript externo. Django lo buscará en dashboard/static/dashboard/js/dashboard_logic.js #}
+<script src="{% static 'dashboard/js/dashboard_logic.js' %}"></script>
+{# --- FIN MODIFICADO --- #}
 {% endblock %}
