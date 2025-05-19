@@ -64,7 +64,7 @@ ROOT_URLCONF = 'TaskFlowProject.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'], # Si tienes plantillas a nivel de proyecto
+        'DIRS': [BASE_DIR / 'templates'], # Esto ahora apuntará a TaskFlow/templates/
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
