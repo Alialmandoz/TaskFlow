@@ -123,3 +123,7 @@ venv.bak/
 .DS_Store
 Thumbs.db
 project_structure_and_content.txt
+
+# carpeta a ser ignorada/
+
+/ignore/
