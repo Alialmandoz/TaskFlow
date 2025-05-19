@@ -1,0 +1,54 @@
+{# TaskFlow/templates/registration/login.html #}
+{% extends "tasks/base.html" %} {# O la plantilla base de tu proyecto si tienes una diferente #}
+{% load crispy_forms_tags %}
+
+{% block title %}Iniciar Sesión - TaskFlow{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="card-title mb-0 text-center">Iniciar Sesión en TaskFlow</h2>
+                </div>
+                <div class="card-body p-4">
+                    {% if form.errors %}
+                        <div class="alert alert-danger" role="alert">
+                            Tu nombre de usuario y contraseña no coinciden. Por favor, inténtalo de nuevo.
+                        </div>
+                    {% endif %}
+
+                    {% if next %}
+                        {% if user.is_authenticated %}
+                        <div class="alert alert-warning" role="alert">
+                            Tu cuenta no tiene acceso a esta página. Para proceder,
+                            por favor inicia sesión con una cuenta que tenga acceso.
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info" role="alert">
+                            Por favor, inicia sesión para ver esta página.
+                        </div>
+                        {% endif %}
+                    {% endif %}
+
+                    <form method="post" action="{% url 'login' %}">
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        <input type="hidden" name="next" value="{{ next|default:'/' }}"> {# Redirige a 'next' o a la raíz por defecto #}
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-block mt-3">Iniciar Sesión</button>
+                        </div>
+                    </form>
+                    <hr>
+                    <div class="text-center">
+                        {# Descomenta estas líneas cuando implementes estas funcionalidades #}
+                        {# <p><a href="{% url 'password_reset' %}">¿Olvidaste tu contraseña?</a></p> #}
+                        {# <p>¿No tienes una cuenta? <a href="{% url 'signup' %}">Regístrate</a></p> #}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

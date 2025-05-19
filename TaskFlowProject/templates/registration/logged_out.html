@@ -1,0 +1,21 @@
+{# TaskFlow/templates/registration/logged_out.html #}
+{% extends "tasks/base.html" %}
+
+{% block title %}Sesión Cerrada - TaskFlow{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body text-center p-4">
+                    <h2>Has cerrado sesión.</h2>
+                    <p>¡Gracias por usar TaskFlow! Esperamos verte pronto.</p>
+                    <a href="{% url 'login' %}" class="btn btn-primary mt-3">Iniciar Sesión de Nuevo</a>
+                    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary mt-3 ms-2">Ir al Dashboard (si es público)</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

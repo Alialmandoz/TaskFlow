@@ -114,13 +114,27 @@ STATIC_ROOT = BASE_DIR / 'staticfiles_production' # Directorio para collectstati
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# --- Seguridad Adicional para Producción (cuando DEBUG = False y HTTPS está configurado) ---
-# Descomenta y ajusta estas configuraciones una vez que HTTPS esté funcionando en PythonAnywhere.
-# CSRF_COOKIE_SECURE = True
-# SESSION_COOKIE_SECURE = True
-# SECURE_SSL_REDIRECT = False # Empieza con False, cámbialo a True después de confirmar que HTTPS funciona
-# SECURE_HSTS_SECONDS = 2592000  # Ejemplo: 30 días
-# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-# SECURE_HSTS_PRELOAD = True
-# SECURE_CONTENT_TYPE_NOSNIFF = True
-# X_FRAME_OPTIONS = 'DENY'
+# --- CONFIGURACIÓN DE AUTENTICACIÓN ---
+LOGIN_URL = '/accounts/login/'  # La URL donde los usuarios serán redirigidos para iniciar sesión.
+                              # Coincide con la que Django usa por defecto y la que acabamos de añadir.
+
+LOGIN_REDIRECT_URL = '/'      # A dónde ir después de un login exitoso.
+                              # '/' apuntará a tu dashboard_view.
+                              # Puedes cambiarlo a 'dashboard' si prefieres usar el nombre de la URL.
+
+LOGOUT_REDIRECT_URL = '/'     # A dónde ir después de un logout exitoso (opcional, pero bueno tenerlo).
+# --- FIN CONFIGURACIÓN DE AUTENTICACIÓN ---
+
+
+# Configuración de Email para Desarrollo (imprime en consola)
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# else:
+    # Para producción, necesitarás configurar un backend de email real (SMTP)
+    # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    # EMAIL_HOST = 'smtp.example.com'
+    # EMAIL_PORT = 587
+    # EMAIL_USE_TLS = True
+    # EMAIL_HOST_USER = 'tu_email@example.com'
+    # EMAIL_HOST_PASSWORD = 'tu_password_de_email_o_app_password'
+    # DEFAULT_FROM_EMAIL = 'noreply@taskflowapp.com'
