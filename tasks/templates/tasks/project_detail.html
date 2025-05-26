@@ -1,10 +1,8 @@
-{# D:\trabajo\Propio\IA\programing\TaskFlow\tasks\templates\tasks\project_detail.html #}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ project.name }} - Tareas</title>
-</head>
-<body>
+{% extends "tasks/base.html" %}
+
+{% block title %}{{ project.name }} - Details - TaskFlow{% endblock %}
+
+{% block content %}
     <h1>{{ project.name }}</h1>
     <p>{{ project.description }}</p>
     <p><a href="{% url 'tasks:project_edit' pk=project.pk %}" class="btn btn-secondary">Edit Project</a></p>
@@ -32,6 +30,4 @@
     {% endif %}
 
     <p><a href="{% url 'tasks:project_list' %}">Volver a la lista de proyectos</a></p>
-
-</body>
-</html>
+{% endblock %}

@@ -1,15 +1,8 @@
-{# D:\trabajo\Propio\IA\programing\TaskFlow\tasks\templates\tasks\project_form.html #}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ page_title|default:"Create Project" }} - TaskFlow</title>
-    <style>
-        .errorlist {
-            color: red;
-        }
-    </style>
-</head>
-<body>
+{% extends "tasks/base.html" %}
+
+{% block title %}{{ page_title|default:"Create Project" }} - TaskFlow{% endblock %}
+
+{% block content %}
     <h1>{{ page_title|default:"Create Project" }}</h1>
 
     {# The form's action attribute will be empty if 'project' is present (editing), 
@@ -26,5 +19,4 @@
     {% else %}
         <p><a href="{% url 'tasks:project_list' %}">Cancel and return to project list</a></p>
     {% endif %}
-</body>
-</html>
+{% endblock %}

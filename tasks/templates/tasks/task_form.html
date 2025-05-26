@@ -1,15 +1,8 @@
-{# D:\trabajo\Propio\IA\programing\TaskFlow\tasks\templates\tasks\task_form.html #}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ page_title|default:"Manage Task" }} - TaskFlow</title>
-    <style>
-        .errorlist {
-            color: red;
-        }
-    </style>
-</head>
-<body>
+{% extends "tasks/base.html" %}
+
+{% block title %}{{ page_title|default:"Manage Task" }} - TaskFlow{% endblock %}
+
+{% block content %}
     <h1>{{ page_title|default:"Manage Task" }} for Project: "{{ project.name }}"</h1>
 
     <form method="post" action="{% if task %}{% url 'tasks:task_edit' pk=task.pk %}{% else %}{% url 'tasks:task_create' project_pk=project.pk %}{% endif %}">
@@ -19,6 +12,4 @@
     </form>
 
     <p><a href="{% url 'tasks:project_detail' pk=project.pk %}">Cancel and return to project</a></p>
-
-</body>
-</html>
+{% endblock %}
