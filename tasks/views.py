@@ -80,7 +80,33 @@ def task_create(request, project_pk):
             return redirect('tasks:project_detail', pk=project.pk)
     else:
         form = TaskForm()
-    return render(request, 'tasks/task_form.html', {'form': form, 'project': project})
+    return render(request, 'tasks/task_form.html', {'form': form, 'project': project, 'page_title': 'Create New Task'})
+
+@login_required
+def task_edit(request, pk):
+    task = get_object_or_404(Task, pk=pk)
+    project = task.project # Get the project from the task
+
+    # Authorization check
+    if project.user != request.user:
+        messages.error(request, "You are not authorized to edit this task.")
+        return redirect('tasks:project_list') # Or some other appropriate redirect
+
+    if request.method == 'POST':
+        form = TaskForm(request.POST, instance=task)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Task updated successfully!')
+            return redirect('tasks:project_detail', pk=project.pk)
+    else:
+        form = TaskForm(instance=task)
+    
+    return render(request, 'tasks/task_form.html', {
+        'form': form, 
+        'task': task, # Pass task for dynamic content in template
+        'project': project, # Pass project for cancel link and context
+        'page_title': 'Edit Task'
+    })
 
 @login_required
 @require_POST

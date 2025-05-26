@@ -27,4 +27,7 @@ urlpatterns = [
 
     # URL para editar un proyecto
     path('projects/<int:pk>/edit/', views.project_edit, name='project_edit'),
+
+    # URL para editar una tarea
+    path('tasks/<int:pk>/edit/', views.task_edit, name='task_edit'),
 ]

@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Añadir Tarea a {{ project.name }}</title>
+    <title>{{ page_title|default:"Manage Task" }} - TaskFlow</title>
     <style>
         .errorlist {
             color: red;
@@ -10,15 +10,15 @@
     </style>
 </head>
 <body>
-    <h1>Añadir Tarea a Proyecto: "{{ project.name }}"</h1>
+    <h1>{{ page_title|default:"Manage Task" }} for Project: "{{ project.name }}"</h1>
 
-    <form method="post" action="{% url 'tasks:task_create' project_pk=project.pk %}">
+    <form method="post" action="{% if task %}{% url 'tasks:task_edit' pk=task.pk %}{% else %}{% url 'tasks:task_create' project_pk=project.pk %}{% endif %}">
         {% csrf_token %}
         {{ form.as_p }}
-        <button type="submit">Guardar Tarea</button>
+        <button type="submit">{% if task %}Save Changes{% else %}Create Task{% endif %}</button>
     </form>
 
-    <p><a href="{% url 'tasks:project_detail' pk=project.pk %}">Cancelar y volver al proyecto</a></p>
+    <p><a href="{% url 'tasks:project_detail' pk=project.pk %}">Cancel and return to project</a></p>
 
 </body>
 </html>
