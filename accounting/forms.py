@@ -10,7 +10,7 @@ class TransactionForm(forms.ModelForm):
     (Sin cambios respecto a la versión anterior)
     """
     transaction_date = forms.DateField(
-        widget=forms.DateInput(attrs={'type': 'date'}),
+        widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
         label="Fecha de la Transacción"
     )
     category = forms.ModelChoiceField(

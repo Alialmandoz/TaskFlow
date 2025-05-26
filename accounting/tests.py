@@ -70,11 +70,12 @@ class TransactionEditingTests(TestCase):
         self.project_user1_alt = Project.objects.create(name='Work Project', user=self.user1)
         self.project_user2 = Project.objects.create(name='User2 Project', user=self.user2)
 
+        self.known_date = timezone.now().date() - timezone.timedelta(days=10)
         self.transaction1 = Transaction.objects.create(
             description='Original Transaction Desc',
             amount=50.00,
             user=self.user1,
-            transaction_date=timezone.now().date(),
+            transaction_date=self.known_date, # Use the known date
             category=self.category_user1,
             project=self.project_user1
         )
@@ -163,3 +164,19 @@ class TransactionEditingTests(TestCase):
         response = self.client.get(self.edit_url)
         expected_redirect_url = f"{self.login_url}?next={self.edit_url}"
         self.assertRedirects(response, expected_redirect_url)
+
+    def test_transaction_edit_view_get_owner_prefills_date(self):
+        """Test that the transaction_date is correctly pre-filled in the edit form."""
+        self.client.login(username=self.user1.username, password='password123')
+        
+        response = self.client.get(reverse('accounting:transaction_edit', kwargs={'pk': self.transaction1.pk}))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.context['form'], TransactionForm)
+        self.assertEqual(response.context['form'].instance, self.transaction1)
+        
+        expected_date_str = self.known_date.strftime('%Y-%m-%d')
+        # This checks for '<input type="date" name="transaction_date" value="YYYY-MM-DD" ...>'
+        # It's a robust way to check the actual rendered value for type="date" inputs.
+        self.assertContains(response, f'name="transaction_date"', msg_prefix="Date input field 'transaction_date' not found")
+        self.assertContains(response, f'value="{expected_date_str}"', msg_prefix="Transaction date was not correctly pre-filled in the HTML input")
