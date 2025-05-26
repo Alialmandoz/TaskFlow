@@ -3,6 +3,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.urls import reverse_lazy
+from django.views.decorators.http import require_POST # <-- ADDED THIS LINE
 # --- MODIFICADO: Importar el nuevo formulario de filtro ---
 from .forms import TransactionForm, TransactionFilterForm
 from .models import Transaction, Category # Category para el filtro
