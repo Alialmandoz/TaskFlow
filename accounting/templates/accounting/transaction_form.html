@@ -9,15 +9,15 @@
     <h2>{{ page_title|default:"Gestionar Transacción" }}</h2>
     <hr>
 
-    <form method="post" novalidate>
+    <form method="post" action="{% if transaction %}{% url 'accounting:transaction_edit' pk=transaction.pk %}{% else %}{% url 'accounting:transaction_create' %}{% endif %}" novalidate>
         {% csrf_token %}
         
         {# Esta es la única directiva que renderiza el cuerpo del formulario. #}
         {{ form|crispy }} 
 
         <div class="mt-3">
-            <button type="submit" class="btn btn-primary">Guardar Transacción</button>
-            <a href="{% url 'tasks:project_list' %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">{% if transaction %}Save Changes{% else %}Register Expense{% endif %}</button>
+            <a href="{% url 'accounting:transaction_list' %}" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
 </div>

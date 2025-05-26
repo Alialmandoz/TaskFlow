@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Crear Nuevo Proyecto</title>
+    <title>{{ page_title|default:"Create Project" }} - TaskFlow</title>
     <style>
         .errorlist {
             color: red;
@@ -10,15 +10,21 @@
     </style>
 </head>
 <body>
-    <h1>Crear Nuevo Proyecto</h1>
+    <h1>{{ page_title|default:"Create Project" }}</h1>
 
-    <form method="post" action="{% url 'tasks:project_create' %}">
+    {# The form's action attribute will be empty if 'project' is present (editing), 
+       allowing the form to submit to the current URL (the edit URL).
+       If 'project' is not present (creating), it will submit to the 'project_create' URL. #}
+    <form method="post" action="{% if project %}{% url 'tasks:project_edit' pk=project.pk %}{% else %}{% url 'tasks:project_create' %}{% endif %}">
         {% csrf_token %}
         {{ form.as_p }}
-        <button type="submit">Guardar Proyecto</button>
+        <button type="submit">{% if project %}Save Changes{% else %}Create Project{% endif %}</button>
     </form>
 
-    <p><a href="{% url 'tasks:project_list' %}">Cancelar y volver a la lista</a></p>
-
+    {% if project %}
+        <p><a href="{% url 'tasks:project_detail' pk=project.pk %}">Cancel and return to project details</a></p>
+    {% else %}
+        <p><a href="{% url 'tasks:project_list' %}">Cancel and return to project list</a></p>
+    {% endif %}
 </body>
 </html>

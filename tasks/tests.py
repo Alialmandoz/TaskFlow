@@ -2,6 +2,7 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
 from .models import Project, Task
+from .forms import ProjectForm
 
 # Create your tests here.
 class TaskDeletionTests(TestCase):
@@ -47,3 +48,69 @@ class TaskDeletionTests(TestCase):
         response = self.client.get(self.delete_url)
         self.assertEqual(response.status_code, 405) # Method Not Allowed
         self.assertTrue(Task.objects.filter(pk=self.task1.pk).exists())
+
+class ProjectEditingTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user1 = User.objects.create_user(username='user1', password='password123')
+        self.user2 = User.objects.create_user(username='user2', password='password123')
+        
+        self.project1 = Project.objects.create(name='Original Project Name', description='Original Description', user=self.user1)
+        
+        self.edit_url = reverse('tasks:project_edit', kwargs={'pk': self.project1.pk})
+        self.project_detail_url = reverse('tasks:project_detail', kwargs={'pk': self.project1.pk})
+        self.login_url = reverse('login') 
+
+    def test_project_edit_view_get_owner(self):
+        self.client.login(username='user1', password='password123')
+        response = self.client.get(self.edit_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'tasks/project_form.html')
+        self.assertIsInstance(response.context['form'], ProjectForm)
+        self.assertEqual(response.context['form'].instance, self.project1)
+        self.assertEqual(response.context['page_title'], 'Edit Project')
+
+    def test_project_edit_view_post_owner_valid(self):
+        self.client.login(username='user1', password='password123')
+        updated_data = {
+            'name': 'Updated Project Name',
+            'description': 'Updated Description'
+        }
+        response = self.client.post(self.edit_url, data=updated_data)
+        self.assertRedirects(response, self.project_detail_url)
+        self.project1.refresh_from_db()
+        self.assertEqual(self.project1.name, updated_data['name'])
+        self.assertEqual(self.project1.description, updated_data['description'])
+
+    def test_project_edit_view_post_owner_invalid(self):
+        self.client.login(username='user1', password='password123')
+        invalid_data = {
+            'name': '',  # Name is required
+            'description': 'Description for invalid form'
+        }
+        response = self.client.post(self.edit_url, data=invalid_data)
+        self.assertEqual(response.status_code, 200) # Should re-render the form
+        self.assertFormError(response, 'form', 'name', 'This field is required.')
+        self.project1.refresh_from_db()
+        self.assertEqual(self.project1.name, 'Original Project Name') # Name should not change
+
+    def test_project_edit_view_get_not_owner(self):
+        self.client.login(username='user2', password='password123')
+        response = self.client.get(self.edit_url)
+        self.assertEqual(response.status_code, 404) # View uses get_object_or_404 with user filter
+
+    def test_project_edit_view_post_not_owner(self):
+        self.client.login(username='user2', password='password123')
+        updated_data = {
+            'name': 'Attempted Update by User2',
+            'description': 'Should not work'
+        }
+        response = self.client.post(self.edit_url, data=updated_data)
+        self.assertEqual(response.status_code, 404)
+        self.project1.refresh_from_db()
+        self.assertEqual(self.project1.name, 'Original Project Name') # Name should not change
+
+    def test_project_edit_view_get_unauthenticated(self):
+        response = self.client.get(self.edit_url)
+        expected_redirect_url = f"{self.login_url}?next={self.edit_url}"
+        self.assertRedirects(response, expected_redirect_url)

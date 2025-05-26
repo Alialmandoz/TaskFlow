@@ -71,11 +71,11 @@
                         <td>{{ transaction.category.name|default:"-" }}</td>
                         <td>{{ transaction.project.name|default:"-" }}</td>
                         <td>
-                            <form method="POST" action="{% url 'accounting:transaction_delete' transaction_pk=transaction.pk %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this transaction?');">
+                            <a href="{% url 'accounting:transaction_edit' pk=transaction.pk %}" class="btn btn-secondary btn-sm">Editar</a>
+                            <form method="POST" action="{% url 'accounting:transaction_delete' transaction_pk=transaction.pk %}" style="display: inline; margin-left: 5px;" onsubmit="return confirm('Are you sure you want to delete this transaction?');">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
                             </form>
-                            {# <a href="#" class="btn btn-sm btn-outline-secondary disabled ms-1">Editar</a> #}
                         </td>
                     </tr>
                     {% endfor %}

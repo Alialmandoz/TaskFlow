@@ -2,6 +2,7 @@
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages # Added for success messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 import json
@@ -52,7 +53,20 @@ def project_create(request):
             return redirect('tasks:project_list')
     else:
         form = ProjectForm()
-    return render(request, 'tasks/project_form.html', {'form': form})
+    return render(request, 'tasks/project_form.html', {'form': form, 'page_title': 'Create Project'})
+
+@login_required
+def project_edit(request, pk):
+    project = get_object_or_404(Project, pk=pk, user=request.user)
+    if request.method == 'POST':
+        form = ProjectForm(request.POST, instance=project)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Project updated successfully!')
+            return redirect('tasks:project_detail', pk=project.pk)
+    else:
+        form = ProjectForm(instance=project)
+    return render(request, 'tasks/project_form.html', {'form': form, 'project': project, 'page_title': 'Edit Project'})
 
 @login_required
 def task_create(request, project_pk):

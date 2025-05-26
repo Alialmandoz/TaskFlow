@@ -24,4 +24,7 @@ urlpatterns = [
 
     # URL para eliminar una tarea
     path('tasks/<int:task_pk>/delete/', views.task_delete, name='task_delete'),
+
+    # URL para editar un proyecto
+    path('projects/<int:pk>/edit/', views.project_edit, name='project_edit'),
 ]

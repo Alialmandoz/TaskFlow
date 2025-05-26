@@ -15,4 +15,7 @@ urlpatterns = [
 
     # URL para eliminar una transacción
     path('transaction/<int:transaction_pk>/delete/', views.transaction_delete, name='transaction_delete'),
+
+    # URL para editar una transacción
+    path('transaction/<int:pk>/edit/', views.transaction_edit, name='transaction_edit'),
 ]

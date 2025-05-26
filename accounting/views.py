@@ -2,6 +2,7 @@
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages # Added for success messages
 from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST # <-- ADDED THIS LINE
 # --- MODIFICADO: Importar el nuevo formulario de filtro ---
@@ -24,7 +25,7 @@ def transaction_create(request):
         form = TransactionForm(user=request.user)
     context = {
         'form': form,
-        'page_title': 'Registrar Nuevo Gasto'
+        'page_title': 'Register New Expense' # Changed to English for consistency
     }
     return render(request, 'accounting/transaction_form.html', context)
 
@@ -88,5 +89,22 @@ def transaction_delete(request, transaction_pk):
         
     transaction.delete()
     # Optionally, add a Django messages framework message here
-    # messages.success(request, 'Transaction deleted successfully.')
+    messages.success(request, 'Transaction deleted successfully.') # Added message for consistency
     return redirect('accounting:transaction_list')
+
+@login_required
+def transaction_edit(request, pk):
+    transaction = get_object_or_404(Transaction, pk=pk, user=request.user)
+    if request.method == 'POST':
+        form = TransactionForm(request.POST, instance=transaction, user=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Transaction updated successfully!')
+            return redirect('accounting:transaction_list')
+    else:
+        form = TransactionForm(instance=transaction, user=request.user)
+    return render(request, 'accounting/transaction_form.html', {
+        'form': form, 
+        'transaction': transaction, # Pass transaction to template for dynamic content
+        'page_title': 'Edit Transaction'
+    })
