@@ -72,3 +72,20 @@ def transaction_list(request):
     }
     return render(request, 'accounting/transaction_list.html', context)
 # --- FIN AÑADIDO ---
+
+@login_required
+@require_POST
+def transaction_delete(request, transaction_pk):
+    transaction = get_object_or_404(Transaction, pk=transaction_pk)
+    
+    # Authorization check: Ensure the user deleting the transaction owns it
+    if transaction.user != request.user:
+        # Or handle as an Http404 or some other error indicating not authorized.
+        # For simplicity, redirecting to transaction list.
+        # A message could be added here: messages.error(request, "You are not authorized to delete this transaction.")
+        return redirect('accounting:transaction_list')
+        
+    transaction.delete()
+    # Optionally, add a Django messages framework message here
+    # messages.success(request, 'Transaction deleted successfully.')
+    return redirect('accounting:transaction_list')

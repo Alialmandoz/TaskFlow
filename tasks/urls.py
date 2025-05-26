@@ -21,4 +21,7 @@ urlpatterns = [
 
     # URL para el endpoint de comandos de IA (API)
     path('ai-command/', views.ai_command_handler, name='ai_command_handler'),
+
+    # URL para eliminar una tarea
+    path('tasks/<int:task_pk>/delete/', views.task_delete, name='task_delete'),
 ]

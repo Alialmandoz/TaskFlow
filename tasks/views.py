@@ -68,6 +68,22 @@ def task_create(request, project_pk):
         form = TaskForm()
     return render(request, 'tasks/task_form.html', {'form': form, 'project': project})
 
+@login_required
+@require_POST
+def task_delete(request, task_pk):
+    task = get_object_or_404(Task, pk=task_pk)
+    # Authorization check: Ensure the user deleting the task owns the project it belongs to
+    if task.project.user != request.user:
+        # Or handle as an Http404 or some other error indicating not authorized
+        # For simplicity, redirecting to project list, but a specific error page might be better
+        return redirect('tasks:project_list') 
+    
+    project_pk = task.project.pk # Save project_pk for redirection before task is deleted
+    task.delete()
+    # Optionally, add a Django messages framework message here
+    # messages.success(request, 'Task deleted successfully.')
+    return redirect('tasks:project_detail', pk=project_pk)
+
 # Declaraciones de funciones Gemini (sin cambios)
 GEMINI_FUNCTION_DECLARATIONS = [
      {

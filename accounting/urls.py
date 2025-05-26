@@ -12,4 +12,7 @@ urlpatterns = [
     # --- AÑADIDO: URL para listar transacciones ---
     path('transactions/', views.transaction_list, name='transaction_list'),
     # --- FIN AÑADIDO ---
+
+    # URL para eliminar una transacción
+    path('transaction/<int:transaction_pk>/delete/', views.transaction_delete, name='transaction_delete'),
 ]
