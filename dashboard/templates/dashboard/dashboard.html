@@ -54,6 +54,11 @@
                                                     (Estado: {{ task.get_status_display }})
                                                     {% if task.due_date %} - Vence: {{ task.due_date|date:"d M Y" }}{% endif %}
                                                 </span>
+                                                {# Delete Task Form #}
+                                                <form method="POST" action="{% url 'tasks:task_delete' task_pk=task.pk %}" style="display: inline; margin-left: 10px;" onsubmit="return confirm('Are you sure you want to delete this task?');">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-danger btn-sm" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;">Eliminar</button>
+                                                </form>
                                             </li>
                                             {% if forloop.last %}<style>.task-list-item:last-child { border-bottom: none; }</style>{% endif %}
                                         {% endfor %}
@@ -95,6 +100,11 @@
                                     {% if transaction.project %}
                                         | Proyecto: {{ transaction.project.name }}
                                     {% endif %}
+                                    {# Delete Transaction Form #}
+                                    <form method="POST" action="{% url 'accounting:transaction_delete' transaction_pk=transaction.pk %}" style="display: inline; margin-left: 10px;" onsubmit="return confirm('Are you sure you want to delete this transaction?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger btn-sm" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;">Eliminar</button>
+                                    </form>
                                 </p>
                             </li>
                         {% endfor %}
