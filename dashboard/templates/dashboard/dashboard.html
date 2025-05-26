@@ -102,14 +102,16 @@
                                     {% if transaction.project %}
                                         | Proyecto: {{ transaction.project.name }}
                                     {% endif %}
-                                    {# Edit Transaction Link #}
-                                    <a href="{% url 'accounting:transaction_edit' pk=transaction.pk %}" class="btn btn-secondary btn-sm" style="padding: 0.1rem 0.3rem; font-size: 0.75rem; margin-left: 10px;">Editar</a>
-                                    {# Delete Transaction Form #}
-                                    <form method="POST" action="{% url 'accounting:transaction_delete' transaction_pk=transaction.pk %}" style="display: inline; margin-left: 5px;" onsubmit="return confirm('Are you sure you want to delete this transaction?');">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-danger btn-sm" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;">Eliminar</button>
-                                    </form>
                                 </p>
+                                <div class="d-flex align-items-center mt-2">
+                                    {# Edit Transaction Link #}
+                                    <a href="{% url 'accounting:transaction_edit' pk=transaction.pk %}" class="btn btn-secondary btn-sm">Editar</a>
+                                    {# Delete Transaction Form #}
+                                    <form method="POST" action="{% url 'accounting:transaction_delete' transaction_pk=transaction.pk %}" class="ms-2" onsubmit="return confirm('Are you sure you want to delete this transaction?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+                                    </form>
+                                </div>
                             </li>
                         {% endfor %}
                     </ul>
