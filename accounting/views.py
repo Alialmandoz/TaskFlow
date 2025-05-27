@@ -4,7 +4,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages # Added for success messages
 from django.urls import reverse_lazy
-from django.views.decorators.http import require_POST # <-- ADDED THIS LINE
+from django.views.decorators.http import require_POST # Ensure this line is correctly processed
 # --- MODIFICADO: Importar el nuevo formulario de filtro ---
 from .forms import TransactionForm, TransactionFilterForm
 from .models import Transaction, Category # Category para el filtro
@@ -144,7 +144,7 @@ def transaction_edit(request, pk):
             messages.success(request, 'Transaction updated successfully!')
             return redirect('accounting:transaction_list')
     else:
-        form = TransactionForm(instance=transaction, user=request.user)
+        form = TransactionForm(instance=transaction_instance, user=request.user)
     return render(request, 'accounting/transaction_form.html', {
         'form': form, 
         'transaction': transaction_instance, # Pass transaction to template for dynamic content
