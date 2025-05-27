@@ -10,6 +10,8 @@ from .forms import TransactionForm, TransactionFilterForm
 from .models import Transaction, Category # Category para el filtro
 # --- FIN MODIFICADO ---
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger # Para paginación
+from .services.exchange_rate_service import get_usd_exchange_rate
+from decimal import Decimal # Ensure Decimal is imported for explicit casting if needed
 
 @login_required
 def transaction_create(request):
@@ -18,6 +20,28 @@ def transaction_create(request):
         if form.is_valid():
             transaction = form.save(commit=False)
             transaction.user = request.user
+
+            # --- Multi-currency logic ---
+            current_rate = get_usd_exchange_rate(transaction.transaction_date)
+            transaction.exchange_rate_usd = current_rate # Store the rate regardless of currency
+
+            if transaction.currency == 'USD':
+                if current_rate is not None: # Ensure rate is available
+                    transaction.amount = transaction.original_amount * current_rate
+                else:
+                    # Handle case where rate is None (e.g., API failed, no default)
+                    # This might involve setting an error message and re-rendering the form
+                    # For now, assuming get_usd_exchange_rate always returns a Decimal (e.g. default)
+                    # If original_amount is Decimal and current_rate is Decimal, result is Decimal.
+                    # If current_rate could be None, add error handling. The service returns a default.
+                    transaction.amount = transaction.original_amount * Decimal('1200.0000') # Fallback if service failed catastrophically
+                    messages.warning(request, "Could not retrieve live exchange rate, used a default rate for USD conversion.")
+            elif transaction.currency == 'ARS':
+                transaction.amount = transaction.original_amount
+            else:
+                # This case should ideally be prevented by form validation if currency choices are limited
+                pass 
+            
             transaction.save()
             # --- MODIFICADO: Redirigir a la nueva lista de transacciones ---
             return redirect(reverse_lazy('accounting:transaction_list'))
@@ -94,17 +118,35 @@ def transaction_delete(request, transaction_pk):
 
 @login_required
 def transaction_edit(request, pk):
-    transaction = get_object_or_404(Transaction, pk=pk, user=request.user)
+    transaction_instance = get_object_or_404(Transaction, pk=pk, user=request.user) # Renamed to avoid conflict
     if request.method == 'POST':
-        form = TransactionForm(request.POST, instance=transaction, user=request.user)
+        form = TransactionForm(request.POST, instance=transaction_instance, user=request.user)
         if form.is_valid():
-            form.save()
+            transaction = form.save(commit=False) # Changed from form.save()
+
+            # --- Multi-currency logic ---
+            current_rate = get_usd_exchange_rate(transaction.transaction_date)
+            transaction.exchange_rate_usd = current_rate # Store the rate regardless of currency
+
+            if transaction.currency == 'USD':
+                if current_rate is not None:
+                    transaction.amount = transaction.original_amount * current_rate
+                else:
+                    # As above, assuming service returns a usable default, or handle error
+                    transaction.amount = transaction.original_amount * Decimal('1200.0000') # Fallback
+                    messages.warning(request, "Could not retrieve live exchange rate, used a default rate for USD conversion.")
+            elif transaction.currency == 'ARS':
+                transaction.amount = transaction.original_amount
+            else:
+                pass
+
+            transaction.save()
             messages.success(request, 'Transaction updated successfully!')
             return redirect('accounting:transaction_list')
     else:
         form = TransactionForm(instance=transaction, user=request.user)
     return render(request, 'accounting/transaction_form.html', {
         'form': form, 
-        'transaction': transaction, # Pass transaction to template for dynamic content
+        'transaction': transaction_instance, # Pass transaction to template for dynamic content
         'page_title': 'Edit Transaction'
     })

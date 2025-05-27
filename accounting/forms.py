@@ -28,22 +28,27 @@ class TransactionForm(forms.ModelForm):
         model = Transaction
         fields = [
             'description',
-            'amount',
+            'original_amount', # User inputs amount in original currency
+            'currency',        # User selects currency
             'transaction_date',
             'type',
             'category',
             'project',
             'notes'
+            # 'amount' is removed from here, will be calculated
+            # 'exchange_rate_usd' is also removed, will be set in the view
             # 'original_instruction' no se incluye aquí, se maneja programáticamente
         ]
         widgets = {
             'notes': forms.Textarea(attrs={'rows': 3}),
             'description': forms.TextInput(attrs={'placeholder': 'Ej: Almuerzo con cliente'}),
-            'amount': forms.NumberInput(attrs={'placeholder': 'Ej: 25.50'}),
+            'original_amount': forms.NumberInput(attrs={'placeholder': 'Ej: 25.50'}),
+            # transaction_date widget is defined at field level
         }
         labels = {
             'description': 'Descripción del Gasto',
-            'amount': 'Monto ($)',
+            'original_amount': 'Monto (Original)', # Will be changed in __init__
+            'currency': 'Moneda',
             'type': 'Tipo de Transacción',
             'notes': 'Notas Adicionales',
         }
@@ -54,6 +59,7 @@ class TransactionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+        self.fields['original_amount'].label = "Amount" # As per instruction
         if user:
             self.fields['category'].queryset = Category.objects.filter(user=user).order_by('name')
             self.fields['project'].queryset = Project.objects.filter(user=user).order_by('name')

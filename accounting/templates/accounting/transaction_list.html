@@ -49,7 +49,8 @@
                     <tr>
                         <th scope="col">Fecha</th>
                         <th scope="col">Descripción</th>
-                        <th scope="col" class="text-end">Monto</th>
+                        <th scope="col" class="text-end">Monto Original</th>
+                        <th scope="col" class="text-end">Monto (ARS)</th>
                         <th scope="col">Categoría</th>
                         <th scope="col">Proyecto</th>
                         <th scope="col">Acciones</th>
@@ -67,7 +68,8 @@
                                 </small>
                             {% endif %}
                         </td>
-                        <td class="text-end">{{ transaction.amount|floatformat:2 }} €</td>
+                        <td class="text-end">{{ transaction.original_amount|floatformat:2 }} {{ transaction.currency }}</td>
+                        <td class="text-end">{{ transaction.amount|floatformat:2 }} ARS</td>
                         <td>{{ transaction.category.name|default:"-" }}</td>
                         <td>{{ transaction.project.name|default:"-" }}</td>
                         <td>
