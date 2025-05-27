@@ -71,4 +71,4 @@ def get_project_by_user_and_name(user_obj: User, project_name: str) -> Project:
          raise ValueError("Invalid user object provided.")
      if not project_name:
          raise ValueError("Project name cannot be empty for lookup.")
-     return get_object_or_404(Project, user=user_obj, name=project_name)
+     return get_object_or_404(Project, user=user_obj, name__iexact=project_name)
