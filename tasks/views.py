@@ -37,9 +37,9 @@ Key Guidelines:
 3.  **Existing Entity Context:** You may be provided with lists of the user's existing project names or expense categories. Use this information to:
     *   For `create_task`, the `project_name` should match (case-insensitively) an existing project if the list is provided.
     *   For `extract_expense_data`, the `category_name_guess` should ideally match (case-insensitively) an existing category if the list is provided. If the user mentions a new category or it's unclear, you can propose a new category name or leave it empty. The `project_name_guess` should also attempt to match an existing project.
-4.  **Ambiguity and Clarification:**
-    *   If an instruction is ambiguous, could be interpreted in multiple ways, or lacks crucial information for a function call (e.g., missing project name for a task), DO NOT guess excessively. Instead, respond with a text message asking the user to clarify the necessary information. Example: "To create the task, which project are you referring to?" or "Could you specify the date of the expense?".
-    *   Avoid asking for clarification if the function has optional fields and the unprovided information corresponds to one of those optional fields (e.g., project description, task due date if not mentioned).
+4.  **Ambigüedad y Clarificación:**
+        *   Si una instrucción es ambigua o falta información **crucial y requerida** para una llamada a función (ej. falta el `project_name` para una tarea, o la `description` y `amount` para un gasto), NO intentes adivinar excesivamente. En su lugar, responde con un mensaje de texto pidiendo al usuario que aclare la información necesaria.
+        *   **Importante:** No pidas clarificación para campos que son **opcionales** en la definición de la función (como `description` para `create_project`, o `due_date` y `status` para `create_task`) si el usuario no los proporciona. Procede con la creación de la entidad utilizando los valores por defecto o dejando los campos opcionales vacíos si el usuario no los especifica.
 5.  **Out-of-Scope Instructions:** If the user's instruction does not relate to creating projects, tasks, or extracting expense data, politely respond that you cannot perform that specific action. Example: "I'm sorry, I can only help you create projects, tasks, and log expenses."
 6.  **Conciseness:** Be concise in your text responses. Avoid unnecessary chatter.
 7.  **Parameter Formatting:** Ensure parameters for function calls follow the format specified in their descriptions (e.g., dates as YYYY-MM-DD, amounts as numbers).
@@ -152,7 +152,7 @@ GEMINI_FUNCTION_DECLARATIONS = [
     {
         "name": "create_task",
         "description": "Crea una nueva tarea y la asigna a un proyecto existente del usuario. Útil cuando el usuario quiere añadir una nueva tarea, ítem por hacer, o acción a un proyecto.",
-        "parameters": { "type": "OBJECT", "properties": { "project_name": { "type": "STRING", "description": "El nombre del proyecto existente al que pertenece la tarea." }, "description": { "type": "STRING", "description": "La descripción de la tarea a realizar." }, "status": { "type": "STRING", "description": "El estado actual de la tarea. Valores permitidos: 'todo', 'doing', 'done'. Por defecto es 'todo' si no se especifica.", "enum": ["todo", "doing", "done"] }, "due_date": { "type": "STRING", "description": "La fecha de vencimiento de la tarea en formato AAAA-MM-DD (opcional)." } }, "required": ["project_name", "description"] }
+        "parameters": { "type": "OBJECT", "properties": { "project_name": { "type": "STRING", "description": "El nombre del proyecto existente al que pertenece la tarea." }, "description": { "type": "STRING", "description": "La descripción de la tarea a realizar." }, "status": { "type": "STRING", "description": "El estado actual de la tarea. Valores permitidos: 'todo', 'doing', 'done'. Por defecto es 'todo' si no se especifica.", "enum": ["todo", "doing", "done"] }, "due_date": { "type": "STRING", "description": "La fecha de vencimiento de la tarea en formato AAAA-MM-DD. Este campo es **completamente opcional**. Si el usuario no lo especifica, la tarea se creará sin fecha de vencimiento." } }, "required": ["project_name", "description"] }
     },
     {
         "name": "extract_expense_data",
