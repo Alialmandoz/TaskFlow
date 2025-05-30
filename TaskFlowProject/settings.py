@@ -15,6 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECRET_KEY: Se leerá de una variable de entorno en PythonAnywhere ('DJANGO_SECRET_KEY').
 # Para desarrollo local, si no está la variable de entorno, usa la clave actual como fallback.
 # ¡¡ASEGÚRATE DE CONFIGURAR 'DJANGO_SECRET_KEY' COMO VARIABLE DE ENTORNO EN PYTHONANYWHERE!!
+
 SECRET_KEY = os.environ.get(
     'DJANGO_SECRET_KEY',
     'django-insecure-fok@f_mk=_!+i3%fj=dcv#y)#o)tx1l=g6z$_ziiv%ig&gn_(d' # Tu clave actual como fallback
@@ -24,14 +25,21 @@ SECRET_KEY = os.environ.get(
 # ¡¡ASEGÚRATE DE CONFIGURAR 'GOOGLE_API_KEY' COMO VARIABLE DE ENTORNO EN PYTHONANYWHERE!!
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
-# DEBUG: Para producción, esto DEBE ser False.
-DEBUG = False
+# DEBUG se controla por una variable de entorno, por defecto False (seguro para producción)
+# En desarrollo local, puedes poner DEBUG=True en tu archivo .env
 
-# ALLOWED_HOSTS: Configurado para tu dominio de PythonAnywhere.
-# Si luego añades un dominio personalizado, también deberás añadirlo aquí.
-ALLOWED_HOSTS = ['alialmandoz.pythonanywhere.com']
-# Si necesitas añadir más hosts en el futuro:
-# ALLOWED_HOSTS = ['alialmandoz.pythonanywhere.com', 'www.tu_dominio_personalizado.com']
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('true', '1', 't')
+
+ALLOWED_HOSTS = []
+if DEBUG:
+    ALLOWED_HOSTS.extend(['127.0.0.1', 'localhost'])
+else:
+    # Para producción, se leerá de una variable de entorno o se hardcodea aquí
+    # como ya lo tienes para PythonAnywhere
+    ALLOWED_HOSTS.append(os.getenv('DJANGO_ALLOWED_HOSTS', 'alialmandoz.pythonanywhere.com'))
+    # Si tienes múltiples hosts en producción, puedes splitear una variable de entorno:
+    # production_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', 'alialmandoz.pythonanywhere.com').split(',')
+    # ALLOWED_HOSTS.extend([host.strip() for host in production_hosts])
 
 
 # Application definition
