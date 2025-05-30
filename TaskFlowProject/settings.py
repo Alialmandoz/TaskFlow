@@ -24,14 +24,14 @@ SECRET_KEY = os.environ.get(
 # ¡¡ASEGÚRATE DE CONFIGURAR 'GOOGLE_API_KEY' COMO VARIABLE DE ENTORNO EN PYTHONANYWHERE!!
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
-DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True' # Default a False si no está en .env
+# DEBUG: Para producción, esto DEBE ser False.
+DEBUG = False
 
-if DEBUG:
-    ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
-    # Configuración específica de desarrollo
-else:
-    ALLOWED_HOSTS = [os.getenv('DJANGO_ALLOWED_HOST', 'alialmandoz.pythonanywhere.com')]
-    # Configuración específica de producción
+# ALLOWED_HOSTS: Configurado para tu dominio de PythonAnywhere.
+# Si luego añades un dominio personalizado, también deberás añadirlo aquí.
+ALLOWED_HOSTS = ['alialmandoz.pythonanywhere.com']
+# Si necesitas añadir más hosts en el futuro:
+# ALLOWED_HOSTS = ['alialmandoz.pythonanywhere.com', 'www.tu_dominio_personalizado.com']
 
 
 # Application definition
