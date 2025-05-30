@@ -122,6 +122,78 @@
         </div> {# Fin Columna Derecha #}
     </div> {# Fin .row #}
 
+{# --- AÑADIDO: Sección Resumen de Gastos por Categoría --- #}
+<hr style="margin: 30px 0;">
+
+<section id="expense-summary-section" class="mt-4">
+    <h2 class="mb-3 text-center">Resumen de Tus Gastos</h2>
+
+    <div class="row">
+        {# Columna para Gastos del Último Mes #}
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Gastos de {{ nombre_mes_anterior }}</h4>
+                </div>
+                <div class="card-body">
+                    {% if gastos_ultimo_mes %}
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th class="text-end">Total Gastado (€)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for gasto_cat in gastos_ultimo_mes %}
+                                <tr>
+                                    <td>{{ gasto_cat.category__name }}</td>
+                                    <td class="text-end">{{ gasto_cat.total_gastado|floatformat:2 }} €</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="text-muted">No hay gastos registrados para el mes de {{ nombre_mes_anterior }}.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Columna para Gastos del Año Actual #}
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Gastos del Año {{ ano_actual_display }}</h4>
+                </div>
+                <div class="card-body">
+                    {% if gastos_ano_actual %}
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th class="text-end">Total Gastado (€)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for gasto_cat in gastos_ano_actual %}
+                                <tr>
+                                    <td>{{ gasto_cat.category__name }}</td>
+                                    <td class="text-end">{{ gasto_cat.total_gastado|floatformat:2 }} €</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="text-muted">No hay gastos registrados para el año {{ ano_actual_display }}.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{# --- FIN AÑADIDO --- #}
+
 {% endblock %}
 
 {% block javascript %}
