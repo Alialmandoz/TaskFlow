@@ -29,7 +29,7 @@ DEBUG = False
 
 # ALLOWED_HOSTS: Configurado para tu dominio de PythonAnywhere.
 # Si luego añades un dominio personalizado, también deberás añadirlo aquí.
-ALLOWED_HOSTS = ['alialmandoz.pythonanywhere.com']
+ALLOWED_HOSTS = ['alialmandoz.pythonanywhere.com','127.0.0.1']
 # Si necesitas añadir más hosts en el futuro:
 # ALLOWED_HOSTS = ['alialmandoz.pythonanywhere.com', 'www.tu_dominio_personalizado.com']
 
