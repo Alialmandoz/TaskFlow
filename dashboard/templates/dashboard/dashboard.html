@@ -129,14 +129,30 @@
     <h2 class="mb-3 text-center">Resumen de Tus Gastos</h2>
 
     <div class="row">
-        {# Columna para Gastos del Último Mes #}
+        {# Columna para Gastos del Mes Seleccionado #}
         <div class="col-md-6 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h4 class="mb-0">Gastos de {{ nombre_mes_anterior }}</h4>
+                    <h4 class="mb-0">Gastos de {{ nombre_mes_seleccionado_display }}</h4>
                 </div>
                 <div class="card-body">
-                    {% if gastos_ultimo_mes %}
+                    <form method="GET" action="." class="mb-3"> {# action="." submits to the current URL #}
+                        <div class="row g-2 align-items-end">
+                            <div class="col-auto">
+                                {{ month_selector_form.year.label_tag }}
+                                {{ month_selector_form.year }}
+                            </div>
+                            <div class="col-auto">
+                                {{ month_selector_form.month.label_tag }}
+                                {{ month_selector_form.month }}
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-primary btn-sm">Ver Mes</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    {% if gastos_mes_seleccionado %}
                         <table class="table table-sm table-hover">
                             <thead>
                                 <tr>
@@ -145,7 +161,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for gasto_cat in gastos_ultimo_mes %}
+                                {% for gasto_cat in gastos_mes_seleccionado %}
                                 <tr>
                                     <td>{{ gasto_cat.category__name }}</td>
                                     <td class="text-end">$ {{ gasto_cat.total_gastado|floatformat:2 }}</td> {# <-- Symbol is $ #}
@@ -154,7 +170,7 @@
                             </tbody>
                         </table>
                     {% else %}
-                        <p class="text-muted">No hay gastos registrados para el mes de {{ nombre_mes_anterior }}.</p>
+                        <p class="text-muted">No hay gastos registrados para {{ nombre_mes_seleccionado_display }}.</p>
                     {% endif %}
                 </div>
             </div>
