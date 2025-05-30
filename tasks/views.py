@@ -197,7 +197,8 @@ def ai_command_handler(request):
                 transaction = create_transaction_from_data(
                     user=request.user,
                     description=confirmed_data.get('description'),
-                    amount=confirmed_data.get('amount'),
+                    original_amount=confirmed_data.get('original_amount'),  # CHANGED from amount
+                    currency=confirmed_data.get('currency', 'ARS'),        # ADDED, with default 'ARS'
                     transaction_date_str=confirmed_data.get('transaction_date'),
                     # --- MODIFICADO: Pasar nuevos parámetros de categoría al servicio ---
                     selected_category_id=selected_category_id,

@@ -1,29 +1,29 @@
 from decimal import Decimal, InvalidOperation
-from datetime import datetime
+from datetime import datetime, date # Add date
 from django.utils import timezone # For timezone awareness if needed for date parsing
 
 # Corrected import based on project structure
 from tasks.models import Project as TaskProject 
 from ..models import Transaction, Category
 
-from .exchange_rate_service import get_usd_exchange_rate # To store the daily rate
+# Removed: from .exchange_rate_service import get_usd_exchange_rate # To store the daily rate
 
-def create_transaction_from_data(user, description, amount, transaction_date_str,
+def create_transaction_from_data(user, description, original_amount, currency='ARS', transaction_date_str=None,
                                  selected_category_id=None, create_category_with_name=None,
                                  project_name=None, original_instruction=None):
     """
     Creates a transaction from structured data, typically extracted by AI.
-    Handles date parsing, category creation/retrieval, and project linking.
-    Currently assumes amounts are in ARS.
+    Handles date parsing, category creation/retrieval, project linking,
+    and currency conversion (USD to ARS).
     """
 
-    # Validate and parse amount
+    # Validate and parse original_amount
     try:
-        transaction_amount = Decimal(amount)
-        if transaction_amount <= 0:
-            raise ValueError("Transaction amount must be positive.")
+        transaction_original_amount = Decimal(original_amount)
+        if transaction_original_amount <= 0:
+            raise ValueError("Transaction original_amount must be positive.")
     except (InvalidOperation, ValueError) as e:
-        raise ValueError(f"Invalid amount: {amount}. Error: {e}")
+        raise ValueError(f"Invalid original_amount: {original_amount}. Error: {e}")
 
     # Validate and parse transaction_date
     parsed_date = None
@@ -68,16 +68,31 @@ def create_transaction_from_data(user, description, amount, transaction_date_str
             # or raise an error as it's done here.
             raise ValueError(f"Project '{project_name}' not found for this user.")
 
-    # Create the transaction - Assumes ARS for now from AI
-    current_rate = get_usd_exchange_rate(parsed_date)
+    # Currency Handling and ARS Amount Calculation
+    currency_code = currency.upper() if currency else 'ARS'
+    calculated_ars_amount = transaction_original_amount
+    current_exchange_rate = None
 
+    if currency_code == 'USD':
+        current_exchange_rate = get_usd_exchange_rate(parsed_date) # Call the local/consolidated function
+        calculated_ars_amount = transaction_original_amount * current_exchange_rate
+    elif currency_code == 'ARS':
+        # Store the day's USDARS rate for informational purposes, even if the transaction is in ARS.
+        current_exchange_rate = get_usd_exchange_rate(parsed_date)
+        # If currency is ARS, original_amount IS the ARS amount.
+    else:
+        # For now, if it's not USD, treat as ARS.
+        currency_code = 'ARS' 
+        current_exchange_rate = get_usd_exchange_rate(parsed_date)
+
+    # Create the transaction
     transaction = Transaction.objects.create(
         user=user,
         description=description,
-        original_amount=transaction_amount, # Amount is ARS
-        currency='ARS',                   # Default to ARS
-        amount=transaction_amount,        # ARS amount is same as original
-        exchange_rate_usd=current_rate,   # Store the rate of the day
+        original_amount=transaction_original_amount, # Use the validated original_amount
+        currency=currency_code,                     # Use the normalized currency_code
+        amount=calculated_ars_amount.quantize(Decimal('0.01')), # Store the calculated ARS amount, quantized
+        exchange_rate_usd=current_exchange_rate,    # Store the fetched/determined exchange rate
         category=category_obj,
         project=project_obj,
         transaction_date=parsed_date,
@@ -85,3 +100,59 @@ def create_transaction_from_data(user, description, amount, transaction_date_str
         original_instruction=original_instruction
     )
     return transaction
+
+def get_usd_exchange_rate(transaction_date):
+    """
+    Fetches the USD to ARS exchange rate for a given date.
+    Currently a placeholder.
+    
+    Args:
+        transaction_date (datetime.date): The date for which to fetch the rate.
+        
+    Returns:
+        Decimal: The exchange rate (ARS per 1 USD).
+                 Returns a default/mocked rate if API fails or not implemented.
+    """
+    
+    # TODO: Implement actual API call here.
+    # Example structure:
+    # try:
+    #     response = requests.get(f"{API_BASE_URL}?date={transaction_date}&symbols=ARS&base=USD", headers={"apikey": API_KEY})
+    #     response.raise_for_status() # Raise an exception for HTTP errors
+    #     data = response.json()
+    #     rate = Decimal(data['rates']['ARS'])
+    #     # Optional: Store/cache the fetched rate here for future 'last known value' use.
+    #     return rate
+    # except requests.RequestException as e:
+    #     print(f"API request failed: {e}")
+    #     # Fallback to 'last known value' or default
+    # except (KeyError, ValueError) as e:
+    #     print(f"Failed to parse API response: {e}")
+    #     # Fallback to 'last known value' or default
+
+    print(f"DEBUG: get_usd_exchange_rate called for {transaction_date}. Using placeholder rate.")
+
+    # Placeholder logic:
+    # Attempt to get the most recent rate from existing transactions as a 'last known value'
+    # This is a simplified fallback. A more robust solution might involve a dedicated cache or model for rates.
+    try:
+        # Import Transaction here to avoid circular import issues at module load time,
+        # and if services.py is imported by models.py (though it shouldn't be directly).
+        from ..models import Transaction 
+        latest_transaction_with_rate = Transaction.objects.filter(
+            exchange_rate_usd__isnull=False
+        ).latest('transaction_date') # or 'date_created' or 'id'
+        
+        if latest_transaction_with_rate:
+            print(f"DEBUG: Using last known rate from transaction on {latest_transaction_with_rate.transaction_date}: {latest_transaction_with_rate.exchange_rate_usd}")
+            return latest_transaction_with_rate.exchange_rate_usd
+    except Transaction.DoesNotExist:
+        print("DEBUG: No existing transactions with rates found.")
+    except Exception as e:
+        # Catch any other unexpected error during fallback to prevent full failure
+        print(f"DEBUG: Error during fallback to last known rate: {e}")
+
+    # Default fallback if API fails and no 'last known value' is found
+    default_rate = Decimal('1200.0000') # Matching the data migration default
+    print(f"DEBUG: Falling back to default rate: {default_rate}")
+    return default_rate
