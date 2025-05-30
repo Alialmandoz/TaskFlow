@@ -193,11 +193,15 @@ def ai_command_handler(request):
             create_category_name = confirmed_data.get('create_category_with_name')
             # --- FIN MODIFICADO ---
 
+            # TEMP: Fallback to 'amount' if 'original_amount' is not yet provided by AI.
+            # This should be removed once AI's extract_expense_data is updated.
+            amount_to_process = confirmed_data.get('original_amount', confirmed_data.get('amount'))
+
             try:
                 transaction = create_transaction_from_data(
                     user=request.user,
                     description=confirmed_data.get('description'),
-                    original_amount=confirmed_data.get('original_amount'),  # CHANGED from amount
+                    original_amount=amount_to_process,  # Use the new variable with fallback
                     currency=confirmed_data.get('currency', 'ARS'),        # ADDED, with default 'ARS'
                     transaction_date_str=confirmed_data.get('transaction_date'),
                     # --- MODIFICADO: Pasar nuevos parámetros de categoría al servicio ---
