@@ -88,7 +88,7 @@
                             <li class="expense-list-item" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
                                 <p style="margin-bottom: 5px;"><strong>{{ transaction.description }}</strong></p>
                                 <p style="margin-bottom: 5px; font-size: 1.1em; color: #dc3545;">
-                                    {{ transaction.amount|floatformat:2 }} ARS
+                                    {{ transaction.amount|floatformat:2 }} $
                                     <span style="font-size: 0.8em; color: #6c757d; margin-left: 10px;">
                                         ({{ transaction.transaction_date|date:"d M Y" }})
                                     </span>
@@ -141,14 +141,14 @@
                             <thead>
                                 <tr>
                                     <th>Categoría</th>
-                                    <th class="text-end">Total Gastado (€)</th>
+                                    <th class="text-end">Total Gastado</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for gasto_cat in gastos_ultimo_mes %}
                                 <tr>
                                     <td>{{ gasto_cat.category__name }}</td>
-                                    <td class="text-end">{{ gasto_cat.total_gastado|floatformat:2 }} €</td>
+                                    <td class="text-end">{{ gasto_cat.total_gastado|floatformat:2 }} $</td> {# <-- Symbol is $ #}
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -172,14 +172,14 @@
                             <thead>
                                 <tr>
                                     <th>Categoría</th>
-                                    <th class="text-end">Total Gastado (€)</th>
+                                    <th class="text-end">Total Gastado</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for gasto_cat in gastos_ano_actual %}
                                 <tr>
                                     <td>{{ gasto_cat.category__name }}</td>
-                                    <td class="text-end">{{ gasto_cat.total_gastado|floatformat:2 }} €</td>
+                                    <td class="text-end">{{ gasto_cat.total_gastado|floatformat:2 }} $</td> {# <-- Symbol is $ #}
                                 </tr>
                                 {% endfor %}
                             </tbody>
