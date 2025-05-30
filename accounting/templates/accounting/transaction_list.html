@@ -68,8 +68,8 @@
                                 </small>
                             {% endif %}
                         </td>
-                        <td class="text-end">{{ transaction.original_amount|floatformat:2 }} {{ transaction.currency }}</td>
-                        <td class="text-end">{{ transaction.amount|floatformat:2 }} ARS</td>
+                        <td class="text-end">{{ transaction.original_amount|floatformat:2 }} $</td>
+                        <td class="text-end">{{ transaction.amount|floatformat:2 }} $</td>
                         <td>{{ transaction.category.name|default:"-" }}</td>
                         <td>{{ transaction.project.name|default:"-" }}</td>
                         <td>
