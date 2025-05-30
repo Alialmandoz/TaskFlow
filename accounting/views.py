@@ -10,7 +10,7 @@ from .forms import TransactionForm, TransactionFilterForm
 from .models import Transaction, Category # Category para el filtro
 # --- FIN MODIFICADO ---
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger # Para paginación
-from .services.exchange_rate_service import get_usd_exchange_rate
+from .services import get_usd_exchange_rate # Corrected import
 from decimal import Decimal # Ensure Decimal is imported for explicit casting if needed
 
 @login_required
