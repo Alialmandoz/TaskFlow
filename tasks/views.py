@@ -259,7 +259,7 @@ def ai_command_handler(request):
 
             try:
                 project_obj = create_project_for_user(
-                    user=request.user,
+                    user_obj=request.user,  # Changed from user=request.user
                     name=project_name,
                     description=project_description,
                     original_instruction=project_data_dict['original_instruction']
