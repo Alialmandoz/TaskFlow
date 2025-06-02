@@ -25,22 +25,8 @@ SECRET_KEY = os.environ.get(
 # ¡¡ASEGÚRATE DE CONFIGURAR 'GOOGLE_API_KEY' COMO VARIABLE DE ENTORNO EN PYTHONANYWHERE!!
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
-<<<<<<< HEAD
-# DEBUG: Para producción, esto DEBE ser False.
-DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True' # Default a False si no está en .env
-
-# ALLOWED_HOSTS: Configurado para tu dominio de PythonAnywhere.
-# Si luego añades un dominio personalizado, también deberás añadirlo aquí.
-if DEBUG:
-    ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
-    # Configuración específica de desarrollo
-else:
-    ALLOWED_HOSTS = [os.getenv('DJANGO_ALLOWED_HOST', 'alialmandoz.pythonanywhere.com')]
-    # Configuración específica de producción 
-=======
 # DEBUG se controla por una variable de entorno, por defecto False (seguro para producción)
 # En desarrollo local, puedes poner DEBUG=True en tu archivo .env
-
 DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('true', '1', 't')
 
 ALLOWED_HOSTS = []
@@ -48,13 +34,16 @@ if DEBUG:
     ALLOWED_HOSTS.extend(['127.0.0.1', 'localhost'])
 else:
     # Para producción, se leerá de una variable de entorno o se hardcodea aquí
-    # como ya lo tienes para PythonAnywhere
-    ALLOWED_HOSTS.append(os.getenv('DJANGO_ALLOWED_HOSTS', 'alialmandoz.pythonanywhere.com'))
-    # Si tienes múltiples hosts en producción, puedes splitear una variable de entorno:
-    # production_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', 'alialmandoz.pythonanywhere.com').split(',')
-    # ALLOWED_HOSTS.extend([host.strip() for host in production_hosts])
->>>>>>> main
+    # como ya lo tienes para PythonAnywhere.
+    # El nombre de la variable de entorno para ALLOWED_HOSTS en producción es 'DJANGO_ALLOWED_HOSTS'.
+    # Si 'DJANGO_ALLOWED_HOSTS' no está definida, usa 'alialmandoz.pythonanywhere.com' como fallback.
+    production_host = os.getenv('DJANGO_ALLOWED_HOSTS', 'alialmandoz.pythonanywhere.com')
+    ALLOWED_HOSTS.append(production_host)
 
+    # Ejemplo para múltiples hosts en producción (si necesitas usarlo en el futuro):
+    # production_hosts_str = os.getenv('DJANGO_ALLOWED_HOSTS', 'alialmandoz.pythonanywhere.com')
+    # if production_hosts_str:
+    #     ALLOWED_HOSTS.extend([host.strip() for host in production_hosts_str.split(',')])
 
 # Application definition
 INSTALLED_APPS = [
