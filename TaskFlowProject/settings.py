@@ -25,7 +25,6 @@ SECRET_KEY = os.environ.get(
 # ¡¡ASEGÚRATE DE CONFIGURAR 'GOOGLE_API_KEY' COMO VARIABLE DE ENTORNO EN PYTHONANYWHERE!!
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
-<<<<<<< HEAD
 # DEBUG: Para producción, esto DEBE ser False.
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True' # Default a False si no está en .env
 
@@ -37,7 +36,7 @@ if DEBUG:
 else:
     ALLOWED_HOSTS = [os.getenv('DJANGO_ALLOWED_HOST', 'alialmandoz.pythonanywhere.com')]
     # Configuración específica de producción 
-=======
+
 # DEBUG se controla por una variable de entorno, por defecto False (seguro para producción)
 # En desarrollo local, puedes poner DEBUG=True en tu archivo .env
 
@@ -53,7 +52,6 @@ else:
     # Si tienes múltiples hosts en producción, puedes splitear una variable de entorno:
     # production_hosts = os.getenv('DJANGO_ALLOWED_HOSTS', 'alialmandoz.pythonanywhere.com').split(',')
     # ALLOWED_HOSTS.extend([host.strip() for host in production_hosts])
->>>>>>> main
 
 
 # Application definition
