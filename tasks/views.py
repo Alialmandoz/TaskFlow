@@ -40,7 +40,7 @@ Key Guidelines:
 4.  **Manejo de Parámetros y Completado Inteligente:**
         *   **Parámetros Requeridos (`required` en la definición de la función):**
             *   **Intento de Extracción/Deducción:** Para los campos definidos como **`required`**, siempre debes intentar extraerlos de la instrucción del usuario.
-            *   **plan_initial_project_structure specific instructions:** When using the plan_initial_project_structure function, analyze the project name and description to propose 3 to 5 concrete and actionable initial tasks that will help the user get started. Return these tasks in the suggested_tasks field. The 'suggested_tasks' parameter MUST be an array of non-empty strings. If no tasks can be logically suggested for a very abstract project, provide at least one generic task like 'Define key objectives for the project'.
+            *   **plan_initial_project_structure specific instructions:** When using the plan_initial_project_structure function, analyze the project name and description to propose 3 to 5 concrete and actionable initial tasks that will help the user get started. Return these tasks in the `suggested_tasks` field. The 'suggested_tasks' parameter MUST be an array of non-empty strings. If no tasks can be logically suggested for a very abstract project, provide at least one generic task like 'Define key objectives for the project'.
             *   **Extracción de `amount` para Gastos:** Cuando la función es `extract_expense_data`, si el usuario proporciona un número que claramente parece ser un costo o precio en su instrucción (ej. "herramientas 5000", "café 150"), DEBES interpretar ese número como el `amount`, incluso si no incluye un símbolo de moneda como '$'. La presencia de palabras clave como "gasto", "compra", "costó", "pagué", o una descripción de un ítem seguida de un número, son fuertes indicadores.
             *   **Deducción para `extract_expense_data` (Casos Específicos de Descripción):**
                 *   Si la `description` es ambigua o muy corta (ej. "gastos varios", "compras"), intenta usar el contexto general de la conversación si lo hubiera, o reformula la instrucción para crear una descripción genérica pero útil como "Gasto registrado por IA".
@@ -118,12 +118,10 @@ def task_create(request, project_pk):
 @login_required
 def task_edit(request, pk):
     task = get_object_or_404(Task, pk=pk)
-    project = task.project # Get the project from the task
-
-    # Authorization check
+    project = task.project
     if project.user != request.user:
         messages.error(request, "You are not authorized to edit this task.")
-        return redirect('tasks:project_list') # Or some other appropriate redirect
+        return redirect('tasks:project_list')
 
     if request.method == 'POST':
         form = TaskForm(request.POST, instance=task)
@@ -133,11 +131,11 @@ def task_edit(request, pk):
             return redirect('tasks:project_detail', pk=project.pk)
     else:
         form = TaskForm(instance=task)
-    
+
     return render(request, 'tasks/task_form.html', {
         'form': form, 
-        'task': task, # Pass task for dynamic content in template
-        'project': project, # Pass project for cancel link and context
+        'task': task,
+        'project': project,
         'page_title': 'Edit Task'
     })
 
@@ -145,19 +143,13 @@ def task_edit(request, pk):
 @require_POST
 def task_delete(request, task_pk):
     task = get_object_or_404(Task, pk=task_pk)
-    # Authorization check: Ensure the user deleting the task owns the project it belongs to
     if task.project.user != request.user:
-        # Or handle as an Http404 or some other error indicating not authorized
-        # For simplicity, redirecting to project list, but a specific error page might be better
         return redirect('tasks:project_list') 
-    
-    project_pk = task.project.pk # Save project_pk for redirection before task is deleted
+
+    project_pk = task.project.pk
     task.delete()
-    # Optionally, add a Django messages framework message here
-    # messages.success(request, 'Task deleted successfully.')
     return redirect('tasks:project_detail', pk=project_pk)
 
-# Declaraciones de funciones Gemini (sin cambios)
 GEMINI_FUNCTION_DECLARATIONS = [
     {
         "name": "plan_initial_project_structure",
@@ -175,10 +167,8 @@ GEMINI_FUNCTION_DECLARATIONS = [
                 },
                 "suggested_tasks": {
                     "type": "ARRAY",
-                    "items": {
-                        "type": "STRING"
-                    },
-                    "description": "A list of strings, where each string is the description of a suggested initial task. This list must not be empty."
+                    "items": { "type": "STRING" },
+                    "description": "A list of strings, where each string is the description of a suggested initial task. This list must not be empty." # MODIFICADO
                 }
             },
             "required": ["project_name", "suggested_tasks"]
@@ -196,7 +186,6 @@ GEMINI_FUNCTION_DECLARATIONS = [
     }
 ]
 
-# Vista del manejador de comandos IA
 @login_required
 @require_POST
 def ai_command_handler(request):
@@ -208,6 +197,7 @@ def ai_command_handler(request):
             return JsonResponse({'error': 'API Key no configurada.'}, status=500)
         genai.configure(api_key=api_key)
 
+        data = {}
         try:
             data = json.loads(request.body)
             action = data.get('action')
@@ -219,125 +209,111 @@ def ai_command_handler(request):
         if action == 'confirm_creation':
             confirmed_data = data.get('confirmed_data')
             if not confirmed_data:
-                 return JsonResponse({'error': 'Datos de confirmación no proporcionados.'}, status=400)
-            print(f"DEBUG: [AI Handler] Recibida confirmación con datos: {confirmed_data}")
+                 return JsonResponse({'error': 'Datos de confirmación para gasto no proporcionados.'}, status=400)
+
             original_instruction_for_expense = confirmed_data.pop('_original_user_instruction', None)
-            
-            # --- MODIFICADO: Extraer los nuevos campos de categoría del frontend ---
             selected_category_id = confirmed_data.get('selected_category_id')
             create_category_name = confirmed_data.get('create_category_with_name')
-            # --- FIN MODIFICADO ---
-
-            # TEMP: Fallback to 'amount' if 'original_amount' is not yet provided by AI.
-            # This should be removed once AI's extract_expense_data is updated.
             amount_to_process = confirmed_data.get('original_amount', confirmed_data.get('amount'))
 
             try:
                 transaction = create_transaction_from_data(
                     user=request.user,
                     description=confirmed_data.get('description'),
-                    original_amount=amount_to_process,  # Use the new variable with fallback
-                    currency=confirmed_data.get('currency', 'ARS'),        # ADDED, with default 'ARS'
+                    original_amount=amount_to_process,
+                    currency=confirmed_data.get('currency', 'ARS'),
                     transaction_date_str=confirmed_data.get('transaction_date'),
-                    # --- MODIFICADO: Pasar nuevos parámetros de categoría al servicio ---
                     selected_category_id=selected_category_id,
                     create_category_with_name=create_category_name,
-                    # project_name sigue igual
                     project_name=confirmed_data.get('project_name'),
-                    # --- FIN MODIFICADO ---
                     original_instruction=original_instruction_for_expense
                 )
                 return JsonResponse({
                     'message': f"Gasto '{transaction.description[:30]}...' registrado exitosamente.",
                     'transaction_id': transaction.id,
                     'type': 'transaction_created'
-                    })
+                    }, status=201)
             except (ValueError, TypeError) as e:
-                print(f"ERROR: [AI Handler] Error al crear transacción: {str(e)}")
                 return JsonResponse({'error': f"Error al registrar el gasto: {str(e)}"}, status=400)
 
         elif action == 'confirm_project_creation_with_tasks':
+            project_data_dict = data.get('project_data')
+            selected_tasks_list = data.get('selected_tasks')
+
+            if not isinstance(project_data_dict, dict) or \
+               not project_data_dict.get('name') or not isinstance(project_data_dict.get('name'), str) or \
+               not project_data_dict.get('original_instruction') or not isinstance(project_data_dict.get('original_instruction'), str):
+                return JsonResponse({'error': "Invalid 'project_data' received for project creation."}, status=400)
+
+            project_name = project_data_dict['name'].strip()
+            if not project_name:
+                 return JsonResponse({'error': "Project name cannot be empty."}, status=400)
+            project_description = project_data_dict.get('description')
+            if project_description is not None and not isinstance(project_description, str):
+                return JsonResponse({'error': "Invalid project description type."}, status=400)
+
+            if not isinstance(selected_tasks_list, list):
+                 return JsonResponse({'error': "'selected_tasks' must be a list."}, status=400)
+            if selected_tasks_list and not all(isinstance(task_desc, str) and task_desc.strip() for task_desc in selected_tasks_list):
+                return JsonResponse({'error': "All selected tasks must be non-empty strings."}, status=400)
+
             try:
-                # data = json.loads(request.body) # data ya está parseado arriba
-                project_data_dict = data.get('project_data')
-                selected_tasks_list = data.get('selected_tasks')
-
-                # Validation
-                if not isinstance(project_data_dict, dict) or \
-                   not project_data_dict.get('name') or not isinstance(project_data_dict.get('name'), str) or \
-                   not project_data_dict.get('original_instruction') or not isinstance(project_data_dict.get('original_instruction'), str):
-                    return JsonResponse({'error': "Invalid 'project_data' received for project creation."}, status=400)
-
-                if not isinstance(selected_tasks_list, list) or \
-                   not all(isinstance(task, str) and task.strip() for task in selected_tasks_list):
-                    if not selected_tasks_list: # Permitir lista vacía de tareas
-                         pass # Es válido no tener tareas seleccionadas
-                    else:
-                        return JsonResponse({'error': "Invalid 'selected_tasks' received. Must be a list of non-empty strings."}, status=400)
-
-                project_name = project_data_dict['name'].strip()
-                if not project_name:
-                     return JsonResponse({'error': "Project name cannot be empty."}, status=400)
-
-                project_description = project_data_dict.get('description') # Puede ser None o faltar
-                if project_description is not None and not isinstance(project_description, str):
-                    return JsonResponse({'error': "Invalid project description type."}, status=400)
-
-
                 project_obj = create_project_for_user(
                     user=request.user,
                     name=project_name,
                     description=project_description,
                     original_instruction=project_data_dict['original_instruction']
                 )
-
                 num_successful_tasks = 0
                 failed_tasks_count = 0
-                # print(f"DEBUG: Project '{project_obj.name}' created. Now creating tasks: {selected_tasks_list}")
 
-                for task_description in selected_tasks_list:
-                    try:
-                        create_task_for_project(
-                            project_obj=project_obj,
-                            description=task_description.strip(), # Asegurar que no haya espacios extra
-                            original_instruction=None # Para tareas iniciales creadas así
-                        )
-                        num_successful_tasks += 1
-                    except ValueError as e_task:
-                        print(f"ERROR: [AI Handler] Error creating task '{task_description[:30]}...' for project '{project_obj.name}': {str(e_task)}")
-                        failed_tasks_count += 1
+                for task_description_raw in selected_tasks_list:
+                    task_desc_stripped = task_description_raw.strip()
+                    if task_desc_stripped:
+                        try:
+                            create_task_for_project(
+                                project_obj=project_obj,
+                                description=task_desc_stripped,
+                                original_instruction=None
+                            )
+                            num_successful_tasks += 1
+                        except ValueError as e_task:
+                            print(f"ERROR: [AI Handler] Error creating task '{task_desc_stripped[:30]}...' for project '{project_obj.name}': {str(e_task)}")
+                            failed_tasks_count += 1
 
                 message = f"Project '{project_obj.name}' created successfully."
-                if selected_tasks_list: # Solo mencionar tareas si se intentó crearlas
-                    message += f" {num_successful_tasks} of {len(selected_tasks_list)} initial tasks also created."
+                if selected_tasks_list or num_successful_tasks > 0 or failed_tasks_count > 0:
+                    message += f" {num_successful_tasks} initial task(s) also created."
                     if failed_tasks_count > 0:
-                        message += f" ({failed_tasks_count} tasks failed)."
+                        message += f" ({failed_tasks_count} tasks failed to create)."
 
                 return JsonResponse({
                     'message': message,
                     'project_id': project_obj.id,
                     'type': "project_created_with_tasks"
                 }, status=201)
+            except ValueError as e_proj:
+                return JsonResponse({'error': str(e_proj)}, status=400)
+            except Exception as e_gen:
+                print(f"CRITICAL ERROR: [AI Handler] Confirming project/tasks: {type(e_gen).__name__} - {str(e_gen)}\n{traceback.format_exc()}")
+                return JsonResponse({'error': 'An unexpected server error occurred during project creation.'}, status=500)
 
-            except ValueError as e_proj: # Error desde create_project_for_user (ej. nombre duplicado)
-                print(f"ERROR: [AI Handler] ValueError creating project: {str(e_proj)}")
-                return JsonResponse({'error': str(e_proj)}, status=400) # Bad request si es un error de validación
-            except Exception as e_gen: # Otros errores inesperados
-                print(f"CRITICAL ERROR: [AI Handler] Confirming project/tasks: {type(e_gen).__name__} - {str(e_gen)}")
-                print(traceback.format_exc())
-                return JsonResponse({'error': 'An unexpected error occurred on the server during project creation.'}, status=500)
-
-        if not user_instruction_original: # Esta verificación debe ir DESPUÉS de los handlers de acción que no dependen de 'instruction'
+        if not user_instruction_original:
              return JsonResponse({'error': 'Instrucción no proporcionada para procesar por IA.'}, status=400)
 
         current_server_date = timezone.localdate().strftime("%Y-%m-%d")
-        instruction_for_gemini = f"Contexto: Hoy es {current_server_date}. Mis categorías de gastos existentes son: [{', '.join(c.name for c in Category.objects.filter(user=request.user))}]. Instrucción del usuario: {user_instruction_original}"
-        
-        print(f"DEBUG: [AI Handler] Enviando a Gemini (con contexto de fecha y categorías): '{instruction_for_gemini}' para {request.user.username}")
+        user_categories_str = ", ".join(c.name for c in Category.objects.filter(user=request.user))
+        instruction_for_gemini = (
+            f"Contexto: Hoy es {current_server_date}. "
+            f"Mis categorías de gastos existentes son: [{user_categories_str if user_categories_str else 'Ninguna'}]. "
+            f"Instrucción del usuario: {user_instruction_original}"
+        )
+
+        print(f"DEBUG: [AI Handler] Enviando a Gemini: '{instruction_for_gemini}' para {request.user.username}")
 
         model = genai.GenerativeModel(
             model_name='gemini-1.5-flash-latest',
-            system_instruction=TASKFLOW_AI_SYSTEM_INSTRUCTION, # <-- ADD THIS LINE
+            system_instruction=TASKFLOW_AI_SYSTEM_INSTRUCTION,
             tools=GEMINI_FUNCTION_DECLARATIONS,
             safety_settings={
                  HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
@@ -350,17 +326,12 @@ def ai_command_handler(request):
         response = chat.send_message(instruction_for_gemini)
 
         if not response.candidates or not response.candidates[0].content.parts:
-            print(f"DEBUG: [AI Handler] Respuesta Gemini inesperada: {response.prompt_feedback}")
             if response.prompt_feedback and response.prompt_feedback.block_reason == 'SAFETY':
                  return JsonResponse({'error': 'La instrucción fue bloqueada por motivos de seguridad.'}, status=400)
             return JsonResponse({'message': response.text if hasattr(response, 'text') else 'Respuesta IA no clara.'})
 
-        try:
-            function_call_part = response.candidates[0].content.parts[0]
-            function_call = getattr(function_call_part, 'function_call', None)
-        except IndexError:
-             print(f"DEBUG: [AI Handler] Respuesta Gemini sin 'parts'.")
-             return JsonResponse({'message': response.text if hasattr(response, 'text') else 'Respuesta IA no procesable.'})
+        function_call_part = response.candidates[0].content.parts[0]
+        function_call = getattr(function_call_part, 'function_call', None)
 
         if function_call:
             function_name = function_call.name
@@ -368,76 +339,62 @@ def ai_command_handler(request):
             print(f"DEBUG: [AI Handler] Gemini quiere llamar a '{function_name}' con args: {args_dict}")
 
             if function_name == "plan_initial_project_structure":
-                project_name = args_dict.get("project_name")
-                project_name = args_dict.get("project_name")
-                project_description = args_dict.get("project_description") # Optional
+                project_name_from_ai = args_dict.get("project_name")
+                project_description_from_ai = args_dict.get("project_description")
 
-                # Verbose validation for suggested_tasks
-                suggested_tasks_from_ai = args_dict.get('suggested_tasks')
-                # print(f"DEBUG VAL: suggested_tasks_from_ai: {suggested_tasks_from_ai}, tipo: {type(suggested_tasks_from_ai)}")
+                # // INICIO: MODIFICACIÓN PARA CONVERSIÓN Y VALIDACIÓN DE suggested_tasks
+                raw_suggested_tasks = args_dict.get("suggested_tasks")
+                suggested_tasks_from_ai = [] # Default a lista vacía
 
-                if suggested_tasks_from_ai is None:
-                    # print("ERROR DEBUG VAL: suggested_tasks_from_ai is None.")
-                    return JsonResponse({'error': "AI function call missing 'suggested_tasks'. It cannot be None."}, status=400)
+                if raw_suggested_tasks is not None:
+                    try:
+                        suggested_tasks_from_ai = list(raw_suggested_tasks) # Convertir a lista de Python
+                    except TypeError: # Si no es iterable
+                        # print(f"ERROR DEBUG VAL: raw_suggested_tasks (valor: {raw_suggested_tasks}) no es iterable para convertir a lista.")
+                        return JsonResponse({'error': "AI function call: 'suggested_tasks' could not be converted to a list."}, status=400)
 
-                if not isinstance(suggested_tasks_from_ai, list):
-                    # print(f"ERROR DEBUG VAL: suggested_tasks_from_ai is not a list. Type is {type(suggested_tasks_from_ai)}.")
-                    return JsonResponse({'error': "AI function call 'suggested_tasks' must be a list."}, status=400)
-
-                if not suggested_tasks_from_ai: # Checks for empty list
-                    # print("ERROR DEBUG VAL: suggested_tasks_from_ai is an empty list.")
-                    return JsonResponse({'error': "AI function call 'suggested_tasks' must be a non-empty list."}, status=400)
-
-                all_strings = True
-                non_empty_strings = True
-                for item in suggested_tasks_from_ai:
-                    if not isinstance(item, str):
-                        all_strings = False
-                        # print(f"ERROR DEBUG VAL: Task item '{item}' is not a string. Type: {type(item)}")
-                        break
-                    if not item.strip():
-                        non_empty_strings = False
-                        # print(f"ERROR DEBUG VAL: Task item '{item}' is an empty string.")
-                        break
-
-                if not all_strings:
-                    return JsonResponse({'error': "AI function call 'suggested_tasks' must be a list of strings."}, status=400)
-
-                if not non_empty_strings:
-                    return JsonResponse({'error': "AI function call 'suggested_tasks' must be a list of non-empty strings."}, status=400)
-
-                # Validation for project_name (can remain concise)
-                if not project_name or not isinstance(project_name, str) or not project_name.strip():
+                # print(f"DEBUG VAL: project_name_from_ai: '{project_name_from_ai}', tipo: {type(project_name_from_ai)}")
+                if not project_name_from_ai or not isinstance(project_name_from_ai, str) or not project_name_from_ai.strip():
+                    # print("ERROR DEBUG VAL: Falló validación de project_name_from_ai")
                     return JsonResponse({'error': "AI function call missing or invalid 'project_name'."}, status=400)
 
-                project_name = project_name.strip() # Clean project name
-                suggested_tasks = suggested_tasks_from_ai # Use the validated tasks
+                # print(f"DEBUG VAL: suggested_tasks_from_ai (post-conversión): {suggested_tasks_from_ai}, tipo: {type(suggested_tasks_from_ai)}")
 
+                if not isinstance(suggested_tasks_from_ai, list): # Chequeo después de intento de conversión
+                    # print("ERROR DEBUG VAL: suggested_tasks_from_ai NO es una lista después del intento de conversión.")
+                    return JsonResponse({'error': "AI function call: 'suggested_tasks' must be a list."}, status=400)
+
+                if not suggested_tasks_from_ai:
+                    # print("ERROR DEBUG VAL: suggested_tasks_from_ai es una lista vacía.")
+                    return JsonResponse({'error': "AI function call: 'suggested_tasks' list cannot be empty (as per current contract with AI)."}, status=400)
+
+                invalid_tasks_details = []
+                for i, task_item in enumerate(suggested_tasks_from_ai):
+                    if not isinstance(task_item, str) or not task_item.strip():
+                        invalid_tasks_details.append(f"Task at index {i} ('{task_item}') is not a non-empty string.")
+                        # print(f"  Task {i}: '{task_item}', type: {type(task_item)}, strip: '{task_item.strip() if isinstance(task_item, str) else 'N/A'}'")
+
+                if invalid_tasks_details:
+                    # print(f"ERROR DEBUG VAL: suggested_tasks_from_ai contiene elementos no válidos: {invalid_tasks_details}")
+                    return JsonResponse({
+                        'error': "AI function call: 'suggested_tasks' must be a list of non-empty strings.",
+                        'details': invalid_tasks_details
+                    }, status=400)
+                # // FIN: MODIFICACIÓN PARA CONVERSIÓN Y VALIDACIÓN DE suggested_tasks
+
+                project_name = project_name_from_ai.strip()
                 project_data = {
                     "name": project_name,
-                    "description": project_description if isinstance(project_description, str) else "", # Ensure description is a string
+                    "description": project_description_from_ai if isinstance(project_description_from_ai, str) else "",
                     "original_instruction": user_instruction_original
                 }
-
                 return JsonResponse({
                     "action_needed": "confirm_project_with_tasks",
                     "project_data": project_data,
-                    "suggested_tasks": suggested_tasks # Use the validated and potentially renamed variable
+                    "suggested_tasks": suggested_tasks_from_ai
                 })
 
-            elif function_name == "create_project":
-                # ... (sin cambios, solo pasa user_instruction_original)
-                project_name = args_dict.get("name")
-                description = args_dict.get("description")
-                if not project_name: return JsonResponse({'error': "Nombre proyecto faltante (IA)."}, status=400)
-                try:
-                    project = create_project_for_user(request.user, project_name, description, original_instruction=user_instruction_original)
-                    return JsonResponse({'message': f"Proyecto '{project.name}' creado.", 'project_id': project.id, 'type': 'project_created'})
-                except ValueError as e: return JsonResponse({'error': f"Error creando proyecto: {str(e)}"}, status=400)
-
-
             elif function_name == "create_task":
-                # ... (sin cambios, solo pasa user_instruction_original)
                 project_name_for_task = args_dict.get("project_name")
                 task_description = args_dict.get("description")
                 status = args_dict.get("status", "todo")
@@ -457,34 +414,27 @@ def ai_command_handler(request):
             elif function_name == "extract_expense_data":
                  description = args_dict.get("description")
                  amount = args_dict.get("amount")
-                 if not description or amount is None:
-                     return JsonResponse({'error': "IA no extrajo descripción o monto."}, status=400)
-                 
-                 # --- AÑADIDO: Obtener todas las categorías del usuario ---
-                 user_categories_list = list(Category.objects.filter(user=request.user).values('id', 'name').order_by('name'))
-                 # --- FIN AÑADIDO ---
+                 if not description or amount is None :
+                     return JsonResponse({'error': "IA no extrajo descripción o monto válidos."}, status=400)
 
+                 user_categories_list = list(Category.objects.filter(user=request.user).values('id', 'name').order_by('name'))
                  extracted_data = {
                     "description": description,
                     "amount": amount,
                     "transaction_date": args_dict.get("transaction_date"),
-                    "category_name_guess": args_dict.get("category_name_guess"), # La IA puede seguir adivinando
+                    "category_name_guess": args_dict.get("category_name_guess"),
                     "project_name_guess": args_dict.get("project_name_guess"),
                     "_original_user_instruction": user_instruction_original
                  }
-                 print(f"DEBUG: [AI Handler] Datos gasto para confirmar: {extracted_data}")
                  return JsonResponse({
                     "action_needed": "confirm_expense",
                     "message": "Por favor, confirma los detalles del gasto extraídos:",
                     "extracted_data": extracted_data,
-                    # --- AÑADIDO: Enviar lista de categorías al frontend ---
                     "user_categories": user_categories_list
                  })
             else:
-                 print(f"WARN: [AI Handler] Función desconocida: {function_name}")
                  return JsonResponse({'error': f"Función IA desconocida: {function_name}"}, status=400)
         else:
-            print(f"DEBUG: [AI Handler] Respuesta texto Gemini: '{response.text if hasattr(response, 'text') else ''}'")
             return JsonResponse({'message': response.text if hasattr(response, 'text') else 'IA no sugirió acción específica.'})
 
     except StopCandidateException as e:
