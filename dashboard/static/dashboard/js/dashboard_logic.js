@@ -57,6 +57,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok || data.error) { // data.error para errores controlados por el backend con status 200 o 400
                 if (data.action_needed === 'confirm_expense') {
                     displayConfirmationUI(data);
+                } else if (data.action_needed === 'confirm_project_with_tasks') {
+                    displayProjectConfirmationUI(data);
                 } else if (data.error) {
                      responseArea.innerHTML = `<p class="error"><strong>Error:</strong> ${data.error}</p>`;
                 } else { // Cualquier otra respuesta exitosa sin acción específica o error
@@ -293,6 +295,152 @@ document.addEventListener('DOMContentLoaded', function() {
     function cancelConfirmation() {
         responseArea.innerHTML = 'Operación cancelada. Esperando instrucción...';
     }
+
+    // Función para manejar la confirmación de creación de proyecto
+    async function handleProjectCreationConfirmation(event) {
+        event.preventDefault();
+        const button = event.target;
+        const projectData = JSON.parse(button.dataset.projectData);
+
+        const selectedTasks = [];
+        const checkedCheckboxes = document.querySelectorAll('input[name="suggested_task"]:checked');
+        checkedCheckboxes.forEach(checkbox => {
+            selectedTasks.push(checkbox.value);
+        });
+
+        responseArea.innerHTML = '<p class="loading">Creating project and tasks...</p>';
+        // Deshabilitar botones para evitar doble submission
+        button.disabled = true;
+        const cancelButton = document.getElementById('cancelProjectCreationBtn');
+        if (cancelButton) cancelButton.disabled = true;
+
+
+        // Obtener el token CSRF del input oculto en el formulario principal
+        const csrfTokenInput = aiCommandForm.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrfTokenInput) {
+            console.error("Error crítico: Input de token CSRF no encontrado para la confirmación del proyecto.");
+            responseArea.innerHTML = '<p class="error">Error de configuración: Falta token CSRF.</p>';
+            // Re-habilitar botones
+            button.disabled = false;
+            if (cancelButton) cancelButton.disabled = false;
+            return;
+        }
+        const currentCsrfToken = csrfTokenInput.value;
+
+        try {
+            const response = await fetch(window.AI_COMMAND_HANDLER_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': currentCsrfToken
+                },
+                body: JSON.stringify({
+                    action: "confirm_project_creation_with_tasks",
+                    project_data: projectData, // Contiene name, description, original_instruction
+                    selected_tasks: selectedTasks
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.type === 'project_created_with_tasks') {
+                responseArea.innerHTML = `<p class="success"><strong>${result.message || 'Project and tasks created successfully!'}</strong></p>`;
+                responseArea.innerHTML += '<p class="loading">Reloading page...</p>';
+                setTimeout(() => { window.location.reload(); }, 1500);
+            } else {
+                responseArea.innerHTML = `<p class="error"><strong>Error:</strong> ${result.error || 'An unknown error occurred during project creation.'}</p>`;
+                // Re-habilitar botones en caso de error para permitir reintentar o cancelar
+                button.disabled = false;
+                if (cancelButton) cancelButton.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error during project creation confirmation:', error);
+            responseArea.innerHTML = `<p class="error"><strong>Connection or script error:</strong> ${error.message}</p>`;
+            // Re-habilitar botones
+            button.disabled = false;
+            if (cancelButton) cancelButton.disabled = false;
+        }
+    }
+
+
+    // Nueva función para mostrar UI de confirmación de proyecto con tareas
+    function displayProjectConfirmationUI(data) {
+        responseArea.innerHTML = ''; // Limpiar área de respuesta
+
+        // Mostrar nombre del proyecto
+        const projectNameH3 = document.createElement('h3');
+        projectNameH3.innerHTML = `<strong>Project Name:</strong> ${data.project_data.name}`;
+        responseArea.appendChild(projectNameH3);
+
+        // Mostrar descripción del proyecto
+        const projectDescriptionP = document.createElement('p');
+        let descriptionText = data.project_data.description || ''; // Usar cadena vacía si es null/undefined
+        if (descriptionText.trim() === '') {
+            descriptionText = '<em>No description provided.</em>';
+        }
+        projectDescriptionP.innerHTML = `<strong>Description:</strong> ${descriptionText}`;
+        responseArea.appendChild(projectDescriptionP);
+
+        // Encabezado para tareas sugeridas
+        const tasksHeading = document.createElement('h4');
+        tasksHeading.textContent = 'Suggested Initial Tasks:';
+        responseArea.appendChild(tasksHeading);
+
+        // Formulario/Contenedor para las tareas
+        const tasksFormContainer = document.createElement('div'); // Usar un div como contenedor
+        tasksFormContainer.id = 'suggestedTasksForm';
+        tasksFormContainer.style.marginBottom = '15px';
+
+        data.suggested_tasks.forEach((taskDesc, index) => {
+            const taskDiv = document.createElement('div');
+            taskDiv.classList.add('form-check', 'mb-2');
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.classList.add('form-check-input');
+            checkbox.value = taskDesc;
+            checkbox.id = `suggested_task_${index}`;
+            checkbox.name = 'suggested_task';
+            checkbox.checked = true; // Marcado por defecto
+            taskDiv.appendChild(checkbox);
+
+            const label = document.createElement('label');
+            label.classList.add('form-check-label');
+            label.htmlFor = checkbox.id;
+            label.textContent = taskDesc;
+            taskDiv.appendChild(label);
+
+            tasksFormContainer.appendChild(taskDiv);
+        });
+        responseArea.appendChild(tasksFormContainer);
+
+        // Botones de Acción
+        const actionButtonsDiv = document.createElement('div');
+
+        const confirmButton = document.createElement('button');
+        confirmButton.id = 'confirmProjectCreationBtn';
+        confirmButton.textContent = 'Confirm and Create Project';
+        confirmButton.classList.add('btn', 'btn-primary', 'me-2'); // Cambiado a btn-primary
+        confirmButton.dataset.projectData = JSON.stringify(data.project_data); // Incluye name, description, original_instruction
+        confirmButton.addEventListener('click', handleProjectCreationConfirmation); // Attach event listener
+        actionButtonsDiv.appendChild(confirmButton);
+
+        const cancelButton = document.createElement('button');
+        cancelButton.id = 'cancelProjectCreationBtn';
+        cancelButton.textContent = 'Cancel';
+        cancelButton.classList.add('btn', 'btn-secondary');
+        cancelButton.addEventListener('click', () => {
+            responseArea.innerHTML = '<p>Project creation cancelled. Waiting for new instruction...</p>';
+            // Opcionalmente, re-habilitar el formulario de IA si se deshabilita durante la carga
+            // instructionTextarea.disabled = false;
+            // aiCommandForm.querySelector('button[type="submit"]').disabled = false;
+        });
+        actionButtonsDiv.appendChild(cancelButton);
+        responseArea.appendChild(actionButtonsDiv);
+
+        // donde handleProjectCreationConfirmation será una nueva función similar a handleExpenseConfirmation.
+    }
+
 
     // Función para manejar respuestas exitosas generales
     function handleSuccessfulResponse(data, forceReload = false) {

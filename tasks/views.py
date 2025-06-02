@@ -32,7 +32,7 @@ by interpreting their natural language instructions and using the provided funct
 
 Key Guidelines:
 
-1.  **Prioritize Function Calling:** If the user's instruction clearly matches one of the available functions (`create_project`, `create_task`, `extract_expense_data`), you must call that function with the extracted parameters.
+1.  **Prioritize Function Calling:** If the user's instruction clearly matches one of the available functions (`plan_initial_project_structure`, `create_task`, `extract_expense_data`), you must call that function with the extracted parameters.
 2.  **Date Context:** You will always be provided with the current server date. Use it to resolve any relative temporal references (e.g., "yesterday," "tomorrow," "next Tuesday") to an absolute date in YYYY-MM-DD format.
 3.  **Existing Entity Context:** You may be provided with lists of the user's existing project names or expense categories. Use this information to:
     *   For `create_task`, the `project_name` should match (case-insensitively) an existing project if the list is provided.
@@ -40,6 +40,7 @@ Key Guidelines:
 4.  **Manejo de Parámetros y Completado Inteligente:**
         *   **Parámetros Requeridos (`required` en la definición de la función):**
             *   **Intento de Extracción/Deducción:** Para los campos definidos como **`required`**, siempre debes intentar extraerlos de la instrucción del usuario.
+            *   **plan_initial_project_structure specific instructions:** When using the plan_initial_project_structure function, analyze the project name and description to propose 3 to 5 concrete and actionable initial tasks that will help the user get started. Return these tasks in the suggested_tasks field.
             *   **Extracción de `amount` para Gastos:** Cuando la función es `extract_expense_data`, si el usuario proporciona un número que claramente parece ser un costo o precio en su instrucción (ej. "herramientas 5000", "café 150"), DEBES interpretar ese número como el `amount`, incluso si no incluye un símbolo de moneda como '$'. La presencia de palabras clave como "gasto", "compra", "costó", "pagué", o una descripción de un ítem seguida de un número, son fuertes indicadores.
             *   **Deducción para `extract_expense_data` (Casos Específicos de Descripción):**
                 *   Si la `description` es ambigua o muy corta (ej. "gastos varios", "compras"), intenta usar el contexto general de la conversación si lo hubiera, o reformula la instrucción para crear una descripción genérica pero útil como "Gasto registrado por IA".
@@ -158,10 +159,30 @@ def task_delete(request, task_pk):
 
 # Declaraciones de funciones Gemini (sin cambios)
 GEMINI_FUNCTION_DECLARATIONS = [
-     {
-        "name": "create_project",
-        "description": "Crea un nuevo proyecto para el usuario. Útil cuando el usuario quiere iniciar un nuevo proyecto, plan o contenedor de tareas.",
-        "parameters": { "type": "OBJECT", "properties": { "name": { "type": "STRING", "description": "El nombre del proyecto." }, "description": { "type": "STRING", "description": "Una descripción detallada del proyecto (opcional)." } }, "required": ["name"] }
+    {
+        "name": "plan_initial_project_structure",
+        "description": "Takes a new project's name and description and suggests a list of 3 to 5 key initial tasks to start structuring it. The tasks should be actionable and relevant to the described project type. It also returns the original project name and description.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "project_name": {
+                    "type": "STRING",
+                    "description": "The project's name (can be the same as input or slightly refined by AI)."
+                },
+                "project_description": {
+                    "type": "STRING",
+                    "description": "The project's description."
+                },
+                "suggested_tasks": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "STRING"
+                    },
+                    "description": "A list of strings, where each string is the description of a suggested initial task."
+                }
+            },
+            "required": ["project_name", "suggested_tasks"]
+        }
     },
     {
         "name": "create_task",
@@ -235,7 +256,78 @@ def ai_command_handler(request):
                 print(f"ERROR: [AI Handler] Error al crear transacción: {str(e)}")
                 return JsonResponse({'error': f"Error al registrar el gasto: {str(e)}"}, status=400)
 
-        if not user_instruction_original:
+        elif action == 'confirm_project_creation_with_tasks':
+            try:
+                # data = json.loads(request.body) # data ya está parseado arriba
+                project_data_dict = data.get('project_data')
+                selected_tasks_list = data.get('selected_tasks')
+
+                # Validation
+                if not isinstance(project_data_dict, dict) or \
+                   not project_data_dict.get('name') or not isinstance(project_data_dict.get('name'), str) or \
+                   not project_data_dict.get('original_instruction') or not isinstance(project_data_dict.get('original_instruction'), str):
+                    return JsonResponse({'error': "Invalid 'project_data' received for project creation."}, status=400)
+
+                if not isinstance(selected_tasks_list, list) or \
+                   not all(isinstance(task, str) and task.strip() for task in selected_tasks_list):
+                    if not selected_tasks_list: # Permitir lista vacía de tareas
+                         pass # Es válido no tener tareas seleccionadas
+                    else:
+                        return JsonResponse({'error': "Invalid 'selected_tasks' received. Must be a list of non-empty strings."}, status=400)
+
+                project_name = project_data_dict['name'].strip()
+                if not project_name:
+                     return JsonResponse({'error': "Project name cannot be empty."}, status=400)
+
+                project_description = project_data_dict.get('description') # Puede ser None o faltar
+                if project_description is not None and not isinstance(project_description, str):
+                    return JsonResponse({'error': "Invalid project description type."}, status=400)
+
+
+                project_obj = create_project_for_user(
+                    user=request.user,
+                    name=project_name,
+                    description=project_description,
+                    original_instruction=project_data_dict['original_instruction']
+                )
+
+                num_successful_tasks = 0
+                failed_tasks_count = 0
+                # print(f"DEBUG: Project '{project_obj.name}' created. Now creating tasks: {selected_tasks_list}")
+
+                for task_description in selected_tasks_list:
+                    try:
+                        create_task_for_project(
+                            project_obj=project_obj,
+                            description=task_description.strip(), # Asegurar que no haya espacios extra
+                            original_instruction=None # Para tareas iniciales creadas así
+                        )
+                        num_successful_tasks += 1
+                    except ValueError as e_task:
+                        print(f"ERROR: [AI Handler] Error creating task '{task_description[:30]}...' for project '{project_obj.name}': {str(e_task)}")
+                        failed_tasks_count += 1
+
+                message = f"Project '{project_obj.name}' created successfully."
+                if selected_tasks_list: # Solo mencionar tareas si se intentó crearlas
+                    message += f" {num_successful_tasks} of {len(selected_tasks_list)} initial tasks also created."
+                    if failed_tasks_count > 0:
+                        message += f" ({failed_tasks_count} tasks failed)."
+
+                return JsonResponse({
+                    'message': message,
+                    'project_id': project_obj.id,
+                    'type': "project_created_with_tasks"
+                }, status=201)
+
+            except ValueError as e_proj: # Error desde create_project_for_user (ej. nombre duplicado)
+                print(f"ERROR: [AI Handler] ValueError creating project: {str(e_proj)}")
+                return JsonResponse({'error': str(e_proj)}, status=400) # Bad request si es un error de validación
+            except Exception as e_gen: # Otros errores inesperados
+                print(f"CRITICAL ERROR: [AI Handler] Confirming project/tasks: {type(e_gen).__name__} - {str(e_gen)}")
+                print(traceback.format_exc())
+                return JsonResponse({'error': 'An unexpected error occurred on the server during project creation.'}, status=500)
+
+        if not user_instruction_original: # Esta verificación debe ir DESPUÉS de los handlers de acción que no dependen de 'instruction'
              return JsonResponse({'error': 'Instrucción no proporcionada para procesar por IA.'}, status=400)
 
         current_server_date = timezone.localdate().strftime("%Y-%m-%d")
@@ -275,7 +367,34 @@ def ai_command_handler(request):
             args_dict = {key: value for key, value in function_call.args.items()}
             print(f"DEBUG: [AI Handler] Gemini quiere llamar a '{function_name}' con args: {args_dict}")
 
-            if function_name == "create_project":
+            if function_name == "plan_initial_project_structure":
+                project_name = args_dict.get("project_name")
+                project_name = args_dict.get("project_name")
+                project_description = args_dict.get("project_description") # Optional
+                suggested_tasks = args_dict.get("suggested_tasks")
+
+                # Validation
+                if not project_name or not isinstance(project_name, str) or not project_name.strip():
+                    return JsonResponse({'error': "AI function call missing or invalid 'project_name'."}, status=400)
+
+                if not suggested_tasks or not isinstance(suggested_tasks, list) or not all(isinstance(task, str) for task in suggested_tasks) or len(suggested_tasks) == 0:
+                    return JsonResponse({'error': "AI function call missing or invalid 'suggested_tasks'. Must be a non-empty list of strings."}, status=400)
+
+                project_name = project_name.strip() # Clean project name
+
+                project_data = {
+                    "name": project_name,
+                    "description": project_description if isinstance(project_description, str) else "", # Ensure description is a string
+                    "original_instruction": user_instruction_original
+                }
+
+                return JsonResponse({
+                    "action_needed": "confirm_project_with_tasks",
+                    "project_data": project_data,
+                    "suggested_tasks": suggested_tasks
+                })
+
+            elif function_name == "create_project":
                 # ... (sin cambios, solo pasa user_instruction_original)
                 project_name = args_dict.get("name")
                 description = args_dict.get("description")
