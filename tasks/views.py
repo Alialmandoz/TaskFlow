@@ -40,7 +40,7 @@ Key Guidelines:
 4.  **Manejo de Parámetros y Completado Inteligente:**
         *   **Parámetros Requeridos (`required` en la definición de la función):**
             *   **Intento de Extracción/Deducción:** Para los campos definidos como **`required`**, siempre debes intentar extraerlos de la instrucción del usuario.
-            *   **plan_initial_project_structure specific instructions:** When using the plan_initial_project_structure function, analyze the project name and description to propose 3 to 5 concrete and actionable initial tasks that will help the user get started. Return these tasks in the suggested_tasks field.
+            *   **plan_initial_project_structure specific instructions:** When using the plan_initial_project_structure function, analyze the project name and description to propose 3 to 5 concrete and actionable initial tasks that will help the user get started. Return these tasks in the suggested_tasks field. The 'suggested_tasks' parameter MUST be an array of non-empty strings. If no tasks can be logically suggested for a very abstract project, provide at least one generic task like 'Define key objectives for the project'.
             *   **Extracción de `amount` para Gastos:** Cuando la función es `extract_expense_data`, si el usuario proporciona un número que claramente parece ser un costo o precio en su instrucción (ej. "herramientas 5000", "café 150"), DEBES interpretar ese número como el `amount`, incluso si no incluye un símbolo de moneda como '$'. La presencia de palabras clave como "gasto", "compra", "costó", "pagué", o una descripción de un ítem seguida de un número, son fuertes indicadores.
             *   **Deducción para `extract_expense_data` (Casos Específicos de Descripción):**
                 *   Si la `description` es ambigua o muy corta (ej. "gastos varios", "compras"), intenta usar el contexto general de la conversación si lo hubiera, o reformula la instrucción para crear una descripción genérica pero útil como "Gasto registrado por IA".
@@ -178,7 +178,7 @@ GEMINI_FUNCTION_DECLARATIONS = [
                     "items": {
                         "type": "STRING"
                     },
-                    "description": "A list of strings, where each string is the description of a suggested initial task."
+                    "description": "A list of strings, where each string is the description of a suggested initial task. This list must not be empty."
                 }
             },
             "required": ["project_name", "suggested_tasks"]
@@ -371,16 +371,47 @@ def ai_command_handler(request):
                 project_name = args_dict.get("project_name")
                 project_name = args_dict.get("project_name")
                 project_description = args_dict.get("project_description") # Optional
-                suggested_tasks = args_dict.get("suggested_tasks")
 
-                # Validation
+                # Verbose validation for suggested_tasks
+                suggested_tasks_from_ai = args_dict.get('suggested_tasks')
+                # print(f"DEBUG VAL: suggested_tasks_from_ai: {suggested_tasks_from_ai}, tipo: {type(suggested_tasks_from_ai)}")
+
+                if suggested_tasks_from_ai is None:
+                    # print("ERROR DEBUG VAL: suggested_tasks_from_ai is None.")
+                    return JsonResponse({'error': "AI function call missing 'suggested_tasks'. It cannot be None."}, status=400)
+
+                if not isinstance(suggested_tasks_from_ai, list):
+                    # print(f"ERROR DEBUG VAL: suggested_tasks_from_ai is not a list. Type is {type(suggested_tasks_from_ai)}.")
+                    return JsonResponse({'error': "AI function call 'suggested_tasks' must be a list."}, status=400)
+
+                if not suggested_tasks_from_ai: # Checks for empty list
+                    # print("ERROR DEBUG VAL: suggested_tasks_from_ai is an empty list.")
+                    return JsonResponse({'error': "AI function call 'suggested_tasks' must be a non-empty list."}, status=400)
+
+                all_strings = True
+                non_empty_strings = True
+                for item in suggested_tasks_from_ai:
+                    if not isinstance(item, str):
+                        all_strings = False
+                        # print(f"ERROR DEBUG VAL: Task item '{item}' is not a string. Type: {type(item)}")
+                        break
+                    if not item.strip():
+                        non_empty_strings = False
+                        # print(f"ERROR DEBUG VAL: Task item '{item}' is an empty string.")
+                        break
+
+                if not all_strings:
+                    return JsonResponse({'error': "AI function call 'suggested_tasks' must be a list of strings."}, status=400)
+
+                if not non_empty_strings:
+                    return JsonResponse({'error': "AI function call 'suggested_tasks' must be a list of non-empty strings."}, status=400)
+
+                # Validation for project_name (can remain concise)
                 if not project_name or not isinstance(project_name, str) or not project_name.strip():
                     return JsonResponse({'error': "AI function call missing or invalid 'project_name'."}, status=400)
 
-                if not suggested_tasks or not isinstance(suggested_tasks, list) or not all(isinstance(task, str) for task in suggested_tasks) or len(suggested_tasks) == 0:
-                    return JsonResponse({'error': "AI function call missing or invalid 'suggested_tasks'. Must be a non-empty list of strings."}, status=400)
-
                 project_name = project_name.strip() # Clean project name
+                suggested_tasks = suggested_tasks_from_ai # Use the validated tasks
 
                 project_data = {
                     "name": project_name,
@@ -391,7 +422,7 @@ def ai_command_handler(request):
                 return JsonResponse({
                     "action_needed": "confirm_project_with_tasks",
                     "project_data": project_data,
-                    "suggested_tasks": suggested_tasks
+                    "suggested_tasks": suggested_tasks # Use the validated and potentially renamed variable
                 })
 
             elif function_name == "create_project":
