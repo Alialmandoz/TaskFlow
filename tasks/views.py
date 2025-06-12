@@ -338,53 +338,37 @@ def ai_command_handler(request):
             args_dict = {key: value for key, value in function_call.args.items()}
             print(f"DEBUG: [AI Handler] Gemini quiere llamar a '{function_name}' con args: {args_dict}")
 
+            # // INICIO: MODIFICACIÓN para corregir el fallo en producción
             if function_name == "plan_initial_project_structure":
+                # Extraer los datos de la respuesta de la IA
                 project_name_from_ai = args_dict.get("project_name")
                 project_description_from_ai = args_dict.get("project_description")
-
-                # // INICIO: MODIFICACIÓN PARA CONVERSIÓN Y VALIDACIÓN DE suggested_tasks
                 raw_suggested_tasks = args_dict.get("suggested_tasks")
-                suggested_tasks_from_ai = [] # Default a lista vacía
 
+                # --- Validación robusta ---
+                # 1. Validar el nombre del proyecto
+                if not project_name_from_ai or not isinstance(project_name_from_ai, str) or not project_name_from_ai.strip():
+                    return JsonResponse({'error': "AI function call is missing or has an invalid 'project_name'."}, status=400)
+                
+                # 2. Validar las tareas sugeridas
+                suggested_tasks_from_ai = []
                 if raw_suggested_tasks is not None:
+                    # Forzamos la conversión a una lista de Python. Esto maneja diferentes tipos de iterables
+                    # que la librería de Google podría devolver en diferentes entornos.
                     try:
-                        suggested_tasks_from_ai = list(raw_suggested_tasks) # Convertir a lista de Python
-                    except TypeError: # Si no es iterable
-                        # print(f"ERROR DEBUG VAL: raw_suggested_tasks (valor: {raw_suggested_tasks}) no es iterable para convertir a lista.")
+                        suggested_tasks_from_ai = list(raw_suggested_tasks)
+                    except TypeError:
                         return JsonResponse({'error': "AI function call: 'suggested_tasks' could not be converted to a list."}, status=400)
 
-                # print(f"DEBUG VAL: project_name_from_ai: '{project_name_from_ai}', tipo: {type(project_name_from_ai)}")
-                if not project_name_from_ai or not isinstance(project_name_from_ai, str) or not project_name_from_ai.strip():
-                    # print("ERROR DEBUG VAL: Falló validación de project_name_from_ai")
-                    return JsonResponse({'error': "AI function call missing or invalid 'project_name'."}, status=400)
-
-                # print(f"DEBUG VAL: suggested_tasks_from_ai (post-conversión): {suggested_tasks_from_ai}, tipo: {type(suggested_tasks_from_ai)}")
-
-                if not isinstance(suggested_tasks_from_ai, list): # Chequeo después de intento de conversión
-                    # print("ERROR DEBUG VAL: suggested_tasks_from_ai NO es una lista después del intento de conversión.")
-                    return JsonResponse({'error': "AI function call: 'suggested_tasks' must be a list."}, status=400)
-
-                if not suggested_tasks_from_ai:
-                    # print("ERROR DEBUG VAL: suggested_tasks_from_ai es una lista vacía.")
-                    return JsonResponse({'error': "AI function call: 'suggested_tasks' list cannot be empty (as per current contract with AI)."}, status=400)
-
-                invalid_tasks_details = []
-                for i, task_item in enumerate(suggested_tasks_from_ai):
-                    if not isinstance(task_item, str) or not task_item.strip():
-                        invalid_tasks_details.append(f"Task at index {i} ('{task_item}') is not a non-empty string.")
-                        # print(f"  Task {i}: '{task_item}', type: {type(task_item)}, strip: '{task_item.strip() if isinstance(task_item, str) else 'N/A'}'")
-
-                if invalid_tasks_details:
-                    # print(f"ERROR DEBUG VAL: suggested_tasks_from_ai contiene elementos no válidos: {invalid_tasks_details}")
+                # Ahora validamos el contenido de la lista resultante
+                if not suggested_tasks_from_ai or not all(isinstance(task, str) and task.strip() for task in suggested_tasks_from_ai):
                     return JsonResponse({
-                        'error': "AI function call: 'suggested_tasks' must be a list of non-empty strings.",
-                        'details': invalid_tasks_details
+                        'error': "AI function call: 'suggested_tasks' must be a non-empty list of non-empty strings."
                     }, status=400)
-                # // FIN: MODIFICACIÓN PARA CONVERSIÓN Y VALIDACIÓN DE suggested_tasks
 
-                project_name = project_name_from_ai.strip()
+                # Si todas las validaciones pasan, construimos la respuesta para el frontend
                 project_data = {
-                    "name": project_name,
+                    "name": project_name_from_ai.strip(),
                     "description": project_description_from_ai if isinstance(project_description_from_ai, str) else "",
                     "original_instruction": user_instruction_original
                 }
@@ -393,6 +377,7 @@ def ai_command_handler(request):
                     "project_data": project_data,
                     "suggested_tasks": suggested_tasks_from_ai
                 })
+            # // FIN: MODIFICACIÓN
 
             elif function_name == "create_task":
                 project_name_for_task = args_dict.get("project_name")
